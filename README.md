@@ -1,6 +1,15 @@
 # ChanceROC
+
+BayesianROC (is a DeepROC), allows Chance and Bayesian iso performance baselines   
+DeepROC     (is a FullROC), allows partial/group measures and plots  
+FullROC     (is a SimpleROC), includes all ROC points for all instances including tied scores  
+Simple ROC, a class for simple ROC plots and analysis
   
-Alter parameters at the start of TestChanceROC.py:  
+ConcordanceMatrixPlot (has an ROC object, any of the above), plots the Concordance Matrix  
+
+TestChanceROC.py, creates a BayesianROC object and performs tests for the Chance ROC paper    
+Alter parameters at the start of the file:  
+  
 quiet         = False  
 testNum       = 1  
 useFile       = False  
