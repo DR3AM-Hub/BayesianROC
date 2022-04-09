@@ -1,7 +1,7 @@
 # ChanceROC
 
-BayesianROC (is a DeepROC), allows Chance and Bayesian iso performance baselines   
-DeepROC     (is a FullROC), allows partial/group measures and plots  
+BayesianROC (is a DeepROC), measures and plots with Chance and Bayesian iso performance baselines   
+DeepROC     (is a FullROC), does group-wise partial measures and plots  
 FullROC     (is a SimpleROC), includes all ROC points for all instances including tied scores  
 Simple ROC, a class for simple ROC plots and analysis
   
