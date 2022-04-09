@@ -25,7 +25,7 @@ from TestVectors import getTestVector
 
 quiet         = False
 testNum       = 1
-useFile       = True
+useFile       = False
 resultType    = 'matlab'  # matlab or python
 matlabResults = ['040', '356', '529', '536', '581', '639', '643']
 pythonResults = ['009']
