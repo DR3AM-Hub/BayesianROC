@@ -68,11 +68,35 @@ def bayesian_iso_lines(prevalence, costs, prior):
     #endif
 
     def line_y(x):
-        return m*(x-x_prior)+y_prior
+        import numpy as np
+        # this is a vectorized function
+        # force y to stay within the ROC plot by top-coding    y to 1 with np.minimum
+        # force y to stay within the ROC plot by bottom-coding y to 0 with np.maximum
+        y = m*(x-x_prior)+y_prior
+        if isinstance(y, np.ndarray):
+            y = np.minimum(y, np.ones(y.shape))
+            y = np.maximum(y, np.zeros(y.shape))
+        else:
+            y = min(y, 1)
+            y = max(y, 0)
+        #endif
+        return y
     #enddef
 
     def line_x(y):
-        return (y-y_prior)/m + x_prior
+        import numpy as np
+        # this is a vectorized function
+        # force x to stay within the ROC plot by top-coding    x to 1 with np.minimum
+        # force x to stay within the ROC plot by bottom-coding x to 0 with np.maximum
+        x = (y-y_prior)/m + x_prior
+        if isinstance(x, np.ndarray):
+            x = np.minimum(x, np.ones(x.shape))
+            x = np.maximum(x, np.zeros(x.shape))
+        else:
+            x = min(x, 1)
+            x = max(x, 0)
+        #endif
+        return x
     # enddef
 
     return line_y, line_x  # return a function of x, not a value
@@ -134,41 +158,29 @@ def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
     b_iso_line_y,  b_iso_line_x  = bayesian_iso_lines(prevalence, costs, prior)
     
     def roc_over_bayesian_iso_line_positive(x):
+        # this function is NOT vectorized
         res = approximate_y(x) - b_iso_line_y(x)
-        if res > 0:
-            return res
-        else:
-            return 0
-        #endif
+        return max(res, 0)  # return semi-positive result
     #enddef
 
     def roc_over_bayesian_iso_line_negative(x):
+        # this function is NOT vectorized
         res = approximate_y(x) - b_iso_line_y(x)
-        if res < 0:
-            return res
-        else:
-            return 0
-        #endif
+        return min(res, 0)  # return semi-negative result
     #enddef
 
     def roc_left_of_bayesian_iso_line_positive(y):
+        # this function is NOT vectorized
         # use (1 - ...) in both terms to flip FPR into TNR
         res = (1-approximate_x(y)) - (1-b_iso_line_x(y))
-        if res > 0:
-            return res
-        else:
-            return 0
-        #endif
+        return max(res, 0)  # return semi-positive result
     #enddef
 
     def roc_left_of_bayesian_iso_line_negative(y):
+        # this function is NOT vectorized
         # use (1 - ...) in both terms to flip FPR into TNR
         res = (1-approximate_x(y)) - (1-b_iso_line_x(y))
-        if res < 0:
-            return res
-        else:
-            return 0
-        #endif
+        return min(res, 0)  # return semi-negative result
     #enddef
 
     warnings.filterwarnings('ignore')  # avoid an annoying integration warning.
