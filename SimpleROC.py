@@ -4,17 +4,6 @@
 
 class SimpleROC(object):
     
-    # __init__    constructor
-    # getAUC()
-    # getC()
-    # get()
-    # plot()
-    # set_scores_labels()
-    # set_fpr_tpr()
-    # __str__     to string
-    
-    # for attributes see the constructor 
-    
     def __init__(self, predicted_scores=None, labels=None, poslabel=None, quiet=False):
         '''SimpleROC constructor. If predicted_scores and labels are
            empty then it returns an empty object.'''
@@ -33,19 +22,23 @@ class SimpleROC(object):
             self.AUC                            = metrics.roc_auc_score(self.newlabels,
                                                                         self.predicted_scores)
             self.C                              = C_statistic(self.predicted_scores, self.newlabels)
+            self.optimalpoints                                 = None
+            self.nextfold                                      = 0
+            self.fpr_fold, self.tpr_fold, self.thresholds_fold = [], [], []
+            self.meanAUC, self.stdAUC, self.AUCofMeanROC       = None, None, None
+            self.AUClowCI, self.AUChighCI, self.AUCs           = None, None, None
+            self.mean_fpr, self.mean_tpr, self.std_tpr         = None, None, None
         else:
-            self.predicted_scores = None
-            self.labels           = None
-            self.poslabel         = None
-            self.newlabels        = None
-            self.newposlabel      = None
-            self.fpr              = None
-            self.tpr              = None
-            self.thresholds       = None
-            self.AUC              = None
-            self.C                = None
+            self.predicted_scores, self.labels                 = None, None
+            self.poslabel, self.newlabels, self.newposlabel    = None, None, None
+            self.fpr, self.tpr, self.thresholds                = None, None, None
+            self.AUC, self.C, self.optimalpoints               = None, None, None
+            self.nextfold                                      = 0
+            self.fpr_fold, self.tpr_fold, self.thresholds_fold = [], [], []
+            self.meanAUC, self.stdAUC, self.AUCofMeanROC       = None, None, None
+            self.AUClowCI, self.AUChighCI, self.AUCs           = None, None, None
+            self.mean_fpr, self.mean_tpr, self.std_tpr         = None, None, None
         #endif
-        self.optimalpoints        = None
     #enddef
 
     def getAUC(self):
@@ -106,8 +99,8 @@ class SimpleROC(object):
            optional labels for threshold percentiles or thresholds, and optional optimal ROC points.'''
         '''plotWholeROC plots the whole curve with thresholds labeled and the Metz optimal ROC point(s) indicated'''
         from   Helpers.ROCPlot      import plotROC
-        from   Helpers.ROCPlot      import plotOpt
-        from   Helpers.ROCFunctions import getSkew
+        from   Helpers.ROCPlot      import plotOptimalPointWithThreshold
+        from   Helpers.ROCFunctions import getSlopeOrSkew
         from   Helpers.ROCFunctions import optimal_ROC_point_indices
         import matplotlib.pyplot as plt
         import math
@@ -118,7 +111,7 @@ class SimpleROC(object):
             print(f'Warning from plot(): {msg}')
         #endif
 
-        if self.__class__.__name__ == 'SimpleROC' or not full_fpr_tpr:
+        if self.__class__.__name__ == 'SimpleROC' or not full_fpr_tpr or self.full_thresholds == None:
             fpr         = self.fpr
             tpr         = self.tpr
             thresholds  = self.thresholds
@@ -137,8 +130,11 @@ class SimpleROC(object):
 
         if showOptimalROCpoints:
             # get optimal points here...
-            skew           = getSkew(newlabels, newposlabel, costs)
-            optimalpoints  = optimal_ROC_point_indices(fpr, tpr, skew)
+            P = int(sum(newlabels))
+            N = len(newlabels) - P
+            slopeOrSkew = getSlopeOrSkew(N/P, costs)
+
+            optimalpoints  = optimal_ROC_point_indices(fpr, tpr, slopeOrSkew)
             fpr_opt        = fpr[optimalpoints]
             tpr_opt        = tpr[optimalpoints]
             thresholds_opt = thresholds[optimalpoints]
@@ -150,7 +146,7 @@ class SimpleROC(object):
                 maxThreshold = thresholds[1]  # otherwise, use the next label which should be finite
             # endif
 
-            plotOpt(fpr_opt, tpr_opt, thresholds_opt, maxThreshold, labelThresh)  # add the optimal ROC points
+            plotOptimalPointWithThreshold(fpr_opt, tpr_opt, thresholds_opt, maxThreshold, labelThresh)  # add the optimal ROC points
         # endif
 
         if showPlot:
@@ -162,6 +158,147 @@ class SimpleROC(object):
             fig.savefig(saveFileName)
 
         return fig, ax
+    #enddef
+
+    def plot_folds(self, plotTitle, saveFileName=None, showPlot=True):
+        from Helpers.ROCPlot import plotSimpleROC
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from sklearn.metrics import auc
+
+        if self.nextfold <= 2:
+            ValueError('Multiple folds have not been set.')
+        #endif
+
+        # some ideas borrowed from:
+        # https://ogrisel.github.io/scikit-learn.org/sklearn-tutorial/auto_examples/plot_roc_crossval.html
+        # https://stackoverflow.com/questions/57708023/plotting-the-roc-curve-of-k-fold-cross-validation
+        # but improved here, re the (0,0) ROC point
+        fig      = plt.figure()
+        ax       = fig.add_subplot(1, 1, 1)
+        mean_fpr = np.linspace(0, 1, 200)
+        mean_fpr = np.insert(mean_fpr, 0, 0)  # insert an extra 0 at the beginning
+        mean_fpr = np.append(mean_fpr, 1)     # insert an extra 1 at the end
+        tprs     = []
+        aucs     = []
+        for i in range(0, self.nextfold):
+            tprs.append(np.interp(mean_fpr, self.fpr_fold[i], self.tpr_fold[i]))
+            # interestingly interp, for multiple values of y at x=0, correctly
+            # takes the highest value. one simply needs to insert a point (0,0)
+            # at the beginning (the extra 0 previously inserted, so overwrite it)
+            tprs[i][0]  = 0.0
+            tprs[i][-1] = 1.0
+            aucs.append(auc(self.fpr_fold[i], self.tpr_fold[i]))
+            plt.plot(self.fpr_fold[i], self.tpr_fold[i], lw=2, alpha=0.3,
+                     label=f'Fold {i+1}, AUC={aucs[i]:0.2f}')
+        #endfor
+
+        # add major diagonal
+        x = np.linspace(0, 1, 3)
+        plt.plot(x, x, linestyle='--', color='black')  # default linewidth is 1.5
+        plt.plot(x, x, linestyle='-', color='black', linewidth=0.25)
+        # the above thin (not quite visible) solid line, stops color fills from passing through it
+
+        # add major diagonal
+        self.mean_fpr     = mean_fpr
+        self.mean_tpr     = np.mean(tprs, axis=0)
+        self.AUCofMeanROC = auc(self.mean_fpr, self.mean_tpr)
+        self.meanAUC      = np.mean(aucs)
+        self.stdAUC       = np.std(aucs)
+        self.AUCs         = aucs
+        self.AUChighCI    = np.minimum(self.meanAUC + (2 * self.stdAUC), 1)
+        self.AUClowCI     = np.maximum(self.meanAUC - (2 * self.stdAUC), 0)
+        plotSimpleROC(self.mean_fpr, self.mean_tpr, plotTitle)
+        plt.legend()
+        # print(f'Mean ROC, AUC={self.meanAUC:0.3f} +/- {self.stdAUC:0.3f}')
+        # print(f'AUC of mean ROC is {self.AUCofMeanROC:0.3f}')
+
+        self.std_tpr = np.std(tprs, axis=0)
+        tpr_upper    = np.minimum(self.mean_tpr + (2*self.std_tpr), 1)
+        tpr_lower    = np.maximum(self.mean_tpr - (2*self.std_tpr), 0)
+        plt.fill_between(self.mean_fpr, tpr_lower, tpr_upper, color='grey', alpha=.2,
+                         label=r'Mean ROC $\pm$2 stddev.')
+        if showPlot:
+            plt.show()
+        #endif
+        if saveFileName is not None:
+            fig.savefig(saveFileName)
+        #endif
+        return fig, ax
+    #enddef
+
+    def getAUCofMeanROC(self):
+        import numpy as np
+        from sklearn.metrics import auc
+
+        if self.nextfold <= 2:
+            ValueError('Multiple folds have not been set.')
+        # endif
+
+        if self.AUCofMeanROC != None:
+            return self.AUCofMeanROC
+        else:
+            mean_fpr = np.linspace(0, 1, 200)
+            mean_fpr = np.insert(mean_fpr, 0, 0)  # insert an extra 0 at the beginning
+            mean_fpr = np.append(mean_fpr, 1)  # insert an extra 1 at the end
+            tprs = []
+            aucs = []
+            for i in range(0, self.nextfold):
+                tprs.append(np.interp(mean_fpr, self.fpr_fold[i], self.tpr_fold[i]))
+                # interestingly interp, for multiple values of y at x=0, correctly
+                # takes the highest value. one simply needs to insert a point (0,0)
+                # at the beginning (the extra 0 previously inserted, so overwrite it)
+                tprs[i][0] = 0.0
+                tprs[i][-1] = 1.0
+                aucs.append(auc(self.fpr_fold[i], self.tpr_fold[i]))
+            # endfor
+
+            mean_tpr          = np.mean(tprs, axis=0)
+            self.AUCofMeanROC = auc(mean_fpr, mean_tpr)
+            self.meanAUC      = np.mean(aucs)
+            self.stdAUC       = np.std(aucs)
+            self.AUCs         = aucs
+            self.AUChighCI    = np.minimum(self.meanAUC + (2 * self.stdAUC), 1)
+            self.AUClowCI     = np.maximum(self.meanAUC - (2 * self.stdAUC), 0)
+            return self.AUCofMeanROC
+        #endif
+    #enddef
+
+    def getMeanAUC_andCI(self):
+        import numpy as np
+        from sklearn.metrics import auc
+
+        if self.nextfold <= 2:
+            ValueError('Multiple folds have not been set.')
+        # endif
+
+        if self.meanAUC != None:
+            return self.meanAUC, self.AUClowCI, self.AUChighCI, self.AUCs
+        else:
+            mean_fpr = np.linspace(0, 1, 200)
+            mean_fpr = np.insert(mean_fpr, 0, 0)  # insert an extra 0 at the beginning
+            mean_fpr = np.append(mean_fpr, 1)  # insert an extra 1 at the end
+            tprs = []
+            aucs = []
+            for i in range(0, self.nextfold):
+                tprs.append(np.interp(mean_fpr, self.fpr_fold[i], self.tpr_fold[i]))
+                # interestingly interp, for multiple values of y at x=0, correctly
+                # takes the highest value. one simply needs to insert a point (0,0)
+                # at the beginning (the extra 0 previously inserted, so overwrite it)
+                tprs[i][0] = 0.0
+                tprs[i][-1] = 1.0
+                aucs.append(auc(self.fpr_fold[i], self.tpr_fold[i]))
+            # endfor
+
+            mean_tpr          = np.mean(tprs, axis=0)
+            self.AUCofMeanROC = auc(mean_fpr, mean_tpr)
+            self.meanAUC      = np.mean(aucs)
+            self.stdAUC       = np.std(aucs)
+            self.AUCs         = aucs
+            self.AUChighCI    = np.minimum(self.meanAUC + (2 * self.stdAUC), 1)
+            self.AUClowCI     = np.maximum(self.meanAUC - (2 * self.stdAUC), 0)
+            return self.meanAUC, self.AUClowCI, self.AUChighCI, self.AUCs
+        #endif
     #enddef
 
     def set_scores_labels(self, predicted_scores=None, labels=None, poslabel=None):
@@ -188,7 +325,22 @@ class SimpleROC(object):
             self.C                              = C_statistic(self.predicted_scores, self.newlabels)
         #endif
     #enddef
-    
+
+    def setFoldsNPclassRatio(self, foldsNPclassRatio):
+        self.foldsNPclassRatio = foldsNPclassRatio
+    #enddef
+
+    def set_fold(self, fpr=None, tpr=None, threshold=None):
+        '''Set ROC data for a fold with fpr and tpr; threshold is optional.'''
+        if fpr is None or tpr is None:
+            SystemError('fpr or tpr cannot be empty')
+
+        self.fpr_fold.append(fpr)
+        self.tpr_fold.append(tpr)
+        self.thresholds_fold.append(threshold)
+        self.nextfold += 1
+    #enddef
+
     def set_fpr_tpr(self, fpr=None, tpr=None):
         '''The set_fpr_tpr method is allowed if the object is empty.'''
         from sklearn import metrics

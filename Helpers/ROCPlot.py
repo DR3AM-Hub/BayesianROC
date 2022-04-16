@@ -26,7 +26,7 @@ def plotROC(fpr, tpr, plotTitle, numThresh, thresh, fancyLabel):
     if 'thresh' in locals():
         if 'fancyLabel' not in locals():
             fancyLabel = False
-        addPoints(fpr, tpr, numThresh, thresh, fancyLabel)
+        addPointsAndLabels(fpr, tpr, numThresh, thresh, fancyLabel)
     #endif
 
     plt.xlabel('False Positive Rate')
@@ -47,10 +47,9 @@ def plotSimpleROC(fpr,tpr,title):
     plt.title(title)
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.show()
 #enddef
 
-def addPoints(fpr, tpr, numThresh, thresh, fancyLabel):
+def addPointsAndLabels(fpr, tpr, numThresh, thresh, fancyLabel):
     import math
     import matplotlib.pyplot as plt
     #import matplotlib.ticker as ticker
@@ -145,7 +144,7 @@ def get_ROC_Curve_Label_Offset_Fontsize(x, y, t, maxThresh, fancyLabel):
     return label, offset, fontsize
 #enddef
 
-def plotOpt(fpr_opt, tpr_opt, thresh_opt, maxThresh, fancyLabel):
+def plotOptimalPointWithThreshold(fpr_opt, tpr_opt, thresh_opt, maxThresh, fancyLabel):
     import matplotlib.pyplot as plt
 
     # plot optimal ROC points

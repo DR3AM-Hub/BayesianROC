@@ -117,11 +117,8 @@ def get_positive_negative_scores(scores, labels):
     return posScores, negScores
 #enddef
 
-def getSkew(labels, poslabel, costs, quiet=True):
+def getSlopeOrSkew(NPclassRatio, costs, quiet=True):
 
-    labels, poslabel = checkFixLabels(labels, poslabel)  # if labels not {0,1} nor {True,False} then sets {0,1}
-    P       = int(sum(labels))
-    N       = len(labels) - P
     msg     = ''
     costsAreRates = costs['costsAreRates']
 
@@ -158,7 +155,7 @@ def getSkew(labels, poslabel, costs, quiet=True):
 
         if not quiet:
             print(f'{msg}\n')
-        skew = (N / P) * (cFP - cTN) / (cFN - cTP)
+        skew = NPclassRatio * (cFP - cTN) / (cFN - cTP)
 
     else:
         cFPR, cFNR, cTPR, cTNR = costs['cFPR'], costs['cFNR'], costs['cTPR'], costs['cTNR']
@@ -190,7 +187,7 @@ def getSkew(labels, poslabel, costs, quiet=True):
 
         if not quiet:
             print(f'{msg}\n')
-        skew = ((N / P) ** 2) * (cFPR - cTNR) / (cFNR - cTPR)
+        skew = (NPclassRatio ** 2) * (cFPR - cTNR) / (cFNR - cTPR)
     #endif
 
     return skew

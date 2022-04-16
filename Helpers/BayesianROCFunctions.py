@@ -131,7 +131,7 @@ def resolvePrior(BayesianPrior, prevalence):
 def plot_major_diagonal():
     import matplotlib.pyplot as plt
     import numpy as np
-    x = np.linspace(0, 1, 1000)
+    x = np.linspace(0, 1, 3)
     plt.plot(x, x, linestyle='--', color='black')  # default linewidth is 1.5
     plt.plot(x, x, linestyle='-', color='black', linewidth=0.25)
 #enddef
@@ -156,11 +156,23 @@ def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
     approximate_x = interp1d(tpr, fpr)  # y,x; to estimate x=f_inverse(y)
 
     b_iso_line_y,  b_iso_line_x  = bayesian_iso_lines(prevalence, costs, prior)
-    
+
+    def roc_over_dpos(x):
+        # this function is NOT vectorized
+        res = approximate_y(x) - x
+        return max(res, 0)  # return semi-positive result
+    #enddef
+
     def roc_over_bayesian_iso_line_positive(x):
         # this function is NOT vectorized
         res = approximate_y(x) - b_iso_line_y(x)
         return max(res, 0)  # return semi-positive result
+    #enddef
+
+    def roc_over_dneg(x):
+        # this function is NOT vectorized
+        res = approximate_y(x) - x
+        return min(res, 0)  # return semi-negative result
     #enddef
 
     def roc_over_bayesian_iso_line_negative(x):
@@ -169,11 +181,25 @@ def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
         return min(res, 0)  # return semi-negative result
     #enddef
 
+    def roc_left_of_dpos(y):
+        # this function is NOT vectorized
+        # use (1 - ...) in both terms to flip FPR into TNR
+        res = (1-approximate_x(y)) - (1-y)
+        return max(res, 0)  # return semi-positive result
+    #enddef
+
     def roc_left_of_bayesian_iso_line_positive(y):
         # this function is NOT vectorized
         # use (1 - ...) in both terms to flip FPR into TNR
         res = (1-approximate_x(y)) - (1-b_iso_line_x(y))
         return max(res, 0)  # return semi-positive result
+    #enddef
+
+    def roc_left_of_dneg(y):
+        # this function is NOT vectorized
+        # use (1 - ...) in both terms to flip FPR into TNR
+        res = (1-approximate_x(y)) - (1-y)
+        return min(res, 0)  # return semi-negative result
     #enddef
 
     def roc_left_of_bayesian_iso_line_negative(y):
@@ -184,12 +210,16 @@ def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
     #enddef
 
     warnings.filterwarnings('ignore')  # avoid an annoying integration warning.
-    AUC_pi       = integrate.quad(lambda x: roc_over_bayesian_iso_line_positive(x), 0, 1)[0] \
-                 + integrate.quad(lambda x: roc_over_bayesian_iso_line_negative(x), 0, 1)[0]
 
     pAUC_pi_pos  = integrate.quad(lambda x: roc_over_bayesian_iso_line_positive(x), group['x1'], group['x2'])[0]
     pAUC_pi_neg  = integrate.quad(lambda x: roc_over_bayesian_iso_line_negative(x), group['x1'], group['x2'])[0]
+    pi_y         = integrate.quad(lambda x: b_iso_line_y(x), group['x1'], group['x2'])[0]
     pAUC_pi      = pAUC_pi_pos + pAUC_pi_neg
+
+    pAUC_d_pos   = integrate.quad(lambda x: roc_over_dpos(x), group['x1'], group['x2'])[0]
+    pAUC_d_neg   = integrate.quad(lambda x: roc_over_dneg(x), group['x1'], group['x2'])[0]
+    d_y          = integrate.quad(lambda x: x, group['x1'], group['x2'])[0]
+    pAUC_d       = pAUC_d_pos + pAUC_d_neg
 
     # IntegrationWarning: The maximum number of subdivisions (50) has been achieved.
     #   If increasing the limit yields no improvement it is advised to analyze
@@ -200,20 +230,43 @@ def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
     #   pAUCx_pi_pos = integrate.quad(lambda y: roc_left_of_bayesian_iso_line_positive(y), group['y1'], group['y2'])[0]
     pAUCx_pi_pos = integrate.quad(lambda y: roc_left_of_bayesian_iso_line_positive(y), group['y1'], group['y2'])[0]
     pAUCx_pi_neg = integrate.quad(lambda y: roc_left_of_bayesian_iso_line_negative(y), group['y1'], group['y2'])[0]
+    pi_x         = integrate.quad(lambda y: 1-b_iso_line_x(y), group['y1'], group['y2'])[0]
     pAUCx_pi     = pAUCx_pi_pos + pAUCx_pi_neg
+
+    pAUCx_d_pos = integrate.quad(lambda y: roc_left_of_dpos(y), group['y1'], group['y2'])[0]
+    pAUCx_d_neg = integrate.quad(lambda y: roc_left_of_dneg(y), group['y1'], group['y2'])[0]
+    d_x         = integrate.quad(lambda y: 1-y, group['y1'], group['y2'])[0]
+    pAUCx_d     = pAUCx_d_pos + pAUCx_d_neg
     warnings.resetwarnings()
+
+    AUCi_pi      = (0.5 * pAUC_pi) + (0.5 * pAUCx_pi)
+    AUCi_d       = (0.5 * pAUC_d)  + (0.5 * pAUCx_d)
 
     delx         = group['x2'] - group['x1']
     dely         = group['y2'] - group['y1']
-    cpAUCi_pi    = (0.5 * pAUC_pi) + (0.5 * pAUCx_pi)
-    AUCi_pi      = (delx / (delx + dely)) * pAUC_pi + (dely / (delx + dely)) * pAUCx_pi
+    pdelx        = delx - pi_y   # delx*1 is a vertical   area, minus pi_y, a baseline vertical   area
+    pdely        = dely - pi_x   # dely*1 is a horizontal area, minus pi_x, a baseline horizontal area
+    ddelx        = delx - d_y    # delx*1 is a vertical   area, minus d_y,  a baseline vertical   area
+    ddely        = dely - d_x    # dely*1 is a horizontal area, minus d_x,  a baseline horizontal area
+    AUCni_pi     = (pdelx / (pdelx + pdely)) * pAUC_pi/pdelx + (pdely / (pdelx + pdely)) * pAUCx_pi/pdely
+    AUCni_d      = (ddelx / (ddelx + ddely)) * pAUC_d/ddelx  + (ddely / (ddelx + ddely)) * pAUCx_d/ddely
+    # AUCni_pi     = (delx / (delx + dely)) * pAUC_pi + (dely / (delx + dely)) * pAUCx_pi
+    # AUCni_d      = (delx / (delx + dely)) * pAUC_d  + (dely / (delx + dely)) * pAUCx_d
 
-    measures_dict = dict(AUC_pi=AUC_pi,        # an overall measure
-                         cpAUCi_pi=cpAUCi_pi,  # group measure, not normalized, should sum to the overall measure
-                         AUCi_pi=AUCi_pi,      # group measure, normalized
+    measures_dict = dict(#AUC_pi=AUC_pi,        # an overall measure
+                         #AUC_pi_pos=AUC_pi_pos,     AUC_pi_neg=AUC_pi_neg,
+                         AUCi_pi=AUCi_pi,      # group measure, not normalized, should sum to the overall measure
+                         AUCni_pi=AUCni_pi,    # group measure, normalized
                          pAUC_pi=pAUC_pi,           pAUCx_pi=pAUCx_pi,
                          pAUC_pi_pos=pAUC_pi_pos,   pAUCx_pi_pos=pAUCx_pi_pos,
-                         pAUC_pi_neg=pAUC_pi_neg,   pAUCx_pi_neg=pAUCx_pi_neg)
+                         pAUC_pi_neg=pAUC_pi_neg,   pAUCx_pi_neg=pAUCx_pi_neg,
+                         #AUC_d=AUC_d,         # an overall measure
+                         #AUC_d_pos=AUC_d_pos,       AUC_d_neg=AUC_d_neg,
+                         AUCi_d=AUCi_d,         # group measure, not normalized, should sum to the overall measure
+                         AUCni_d=AUCni_d,       # group measure, normalized
+                         pAUC_d=pAUC_d,             pAUCx_d=pAUCx_d,
+                         pAUC_d_pos=pAUC_d_pos,     pAUCx_d_pos=pAUCx_d_pos,
+                         pAUC_d_neg=pAUC_d_neg,     pAUCx_d_neg=pAUCx_d_neg)
     return measures_dict
 #enddef
 

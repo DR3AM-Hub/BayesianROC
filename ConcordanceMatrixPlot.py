@@ -4,15 +4,6 @@
 
 class ConcordanceMatrixPlot(object):
 
-    # __init__()               constructor
-    # setGroupsBy()
-    # plotGroups()
-    # plot()
-    # get_cMatrix_Label_Size_Fontsize()
-    # getRange_cDelta()        # NOT USED YET
-
-    # for attributes see the constructor
-
     def __init__(self, ROCdata):
         '''ConcordanceMatrix constructor that takes as input a SimpleROC, FullROC or DeepROC object.'''
         import numpy as np
@@ -76,7 +67,7 @@ class ConcordanceMatrixPlot(object):
         # get group information for AUC
         partial_full_fpr, partial_full_tpr, rangeEndpoints1, groupByOtherAxis, groupByThreshold, \
           matchedIndices, approxIndices, rocRuleLeft, rocRuleRight = \
-          self.ROCdata.getGroupForAUCi(groupIndex)
+          self.ROCdata.getGroupForAUCi(groupIndex, forFolds=False)
 
         self.ROCdata.plotGroup(plotTitle, groupIndex, showError, showThresholds,
                                showOptimalROCpoints, costs, saveFileName, numShowThresholds,
@@ -92,8 +83,8 @@ class ConcordanceMatrixPlot(object):
              saveFileName=None, numShowThresholds=30, showPlot=True, labelThresh=True):
         '''Plots the Concordance Matrix.'''
         import matplotlib.pyplot    as     plt
-        from   Helpers.ROCPlot      import addPoints
-        from   Helpers.ROCPlot      import plotOpt
+        from   Helpers.ROCPlot      import addPointsAndLabels
+        from   Helpers.ROCPlot      import plotOptimalPointWithThreshold
         from   Helpers.ROCFunctions import getSkew
         from   Helpers.ROCFunctions import optimal_ROC_point_indices
         import math
@@ -187,7 +178,7 @@ class ConcordanceMatrixPlot(object):
         # add points, score labels, optimal ROC points
         fancyLabel   = True
         if showThresholds:
-            addPoints(self.fpr, self.tpr, numShowThresholds, self.thresholds, labelThresh)
+            addPointsAndLabels(self.fpr, self.tpr, numShowThresholds, self.thresholds, labelThresh)
         #endif
 
         if showOptimalROCpoints:
@@ -199,8 +190,8 @@ class ConcordanceMatrixPlot(object):
             else:
                 maxThreshold = self.thresholds[1]  # otherwise, use the next label which should be finite
             # endif
-            plotOpt(self.fpr[opt_indices], self.tpr[opt_indices], self.thresholds[opt_indices],
-                    maxThreshold, fancyLabel)
+            plotOptimalPointWithThreshold(self.fpr[opt_indices], self.tpr[opt_indices], self.thresholds[opt_indices],
+                                          maxThreshold, fancyLabel)
         #endif
 
         if showPlot:

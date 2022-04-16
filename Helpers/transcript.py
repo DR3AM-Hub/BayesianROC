@@ -20,7 +20,7 @@ class Transcript(object):
 
     def __init__(self, filename):
         self.terminal = sys.stdout
-        self.logfile = open(filename, "w")
+        self.logfile = open(filename, "a")
 
     def write(self, message):
         self.terminal.write(message)

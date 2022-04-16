@@ -389,10 +389,13 @@ def discrete_partial_roc_measures(partial_fpr, partial_tpr, n_negatives, n_posit
         # for avgBA, avgA, avgPPV, avgNPV, avgLRp, avgLRn -- all using ldelw=(ldelx + ldely) an L1 distance
         sum_BA_Area = sum_BA_Area + ((avgtpr + (1-avgfpr))/2)                    * (ldelx + ldely)
         sum_A_Area  = sum_A_Area  + (pi_pos * avgtpr     + pi_neg * (1-avgfpr))  * (ldelx + ldely)
-        sumPPVArea  = sumPPVArea  +((pi_pos_pop * avgtpr)
-                                  / (pi_pos_pop * avgtpr     + pi_neg_pop * avgfpr))     * (ldelx + ldely)
-        sumNPVArea  = sumNPVArea  +((pi_neg_pop * (1-avgfpr))
-                                  / (pi_neg_pop * (1-avgfpr) + pi_pos_pop * (1-avgtpr))) * (ldelx + ldely)
+
+        PPV_denominator                =  pi_pos_pop * avgtpr     + pi_neg_pop * avgfpr
+        NPV_denominator                =  pi_neg_pop * (1-avgfpr) + pi_pos_pop * (1-avgtpr)
+        if PPV_denominator != 0:
+            sumPPVArea  = sumPPVArea  + ((pi_pos_pop * avgtpr) / PPV_denominator)    * (ldelx + ldely)
+        if NPV_denominator != 0:
+            sumNPVArea  = sumNPVArea  + ((pi_neg_pop * (1-avgfpr)) / NPV_denominator)* (ldelx + ldely)
         if avgfpr == 0:
             sumLRpArea  = np.inf
         else:

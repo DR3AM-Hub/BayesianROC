@@ -18,16 +18,31 @@ class BayesianROC(DeepROC):
         self.costs          = costs
     #enddef
 
-    def analyzeGroupVsChance(self, groupIndex, prevalence, costs):
-        prior = (0.5, 0.5)
-        return self.analyzeGroupVsPrior(groupIndex, prevalence, costs, prior)
+    def analyzeGroupFoldsVsChance(self, groupIndex, prevalence, costs):
+        prior    = (0.5, 0.5)
+        forFolds = True
+        return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
     #enddef
 
+    def analyzeGroupVsChance(self, groupIndex, prevalence, costs):
+        prior    = (0.5, 0.5)
+        forFolds = False
+        return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
+    #enddef
+
+    def analyzeGroupFoldsVsPrior(self, groupIndex, prevalence, costs, prior):
+        forFolds = True
+        return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
+    # enddef
+
     def analyzeGroupVsPrior(self, groupIndex, prevalence, costs, prior):
+        forFolds = False
+        return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
+    #enddef
+
+    def analyzeGroupVs(self, groupIndex, prevalence, costs, prior, forFolds):
         from Helpers.BayesianROCFunctions import BayesianAUC
-        P                = sum(self.full_newlabels == 1)
-        N                = sum(self.full_newlabels == 0)
-        returnValues     = self.getGroupForAUCi(groupIndex)
+        returnValues     = self.getGroupForAUCi(groupIndex, forFolds)
         groupByOtherAxis = returnValues[2]
         if self.groupAxis == 'FPR':
             group = dict(x1=self.groups[groupIndex][0],
@@ -43,7 +58,12 @@ class BayesianROC(DeepROC):
             SystemError(f'This function has not been implemented yet for groupAxis=={self.groupAxis}.')
             group = None
         #endif
-        measures_dict = BayesianAUC(self.full_fpr, self.full_tpr, group, prevalence, costs, prior)
+
+        if forFolds:
+            measures_dict = BayesianAUC(self.mean_fpr, self.mean_tpr, group, prevalence, costs, prior)
+        else:
+            measures_dict = BayesianAUC(self.full_fpr, self.full_tpr, group, prevalence, costs, prior)
+        #endif
 
         # # to compute Bhattacharyya Dissimilarity (1 - Bhattacharyya Coefficient) we need to
         # # put the posScores and negScores into bins, and then into dictionaries

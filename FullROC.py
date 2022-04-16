@@ -6,21 +6,6 @@ from SimpleROC import SimpleROC
 
 class FullROC(SimpleROC):
 
-    #    inherited from SimpleROC...
-    # getC()
-    # plot()                   do we need to override this?
-    # set_scores_labels()
-
-    #    FullROC...
-    # __init__()               constructor
-    # get()                    override
-    # getAUC()                 override
-    # set_fpr_tpr()            override (do not allow)
-    # plotConcordanceMatrix()
-    # __str__()                to string
-
-    # for attributes see the constructor 
-    
     def __init__(self, predicted_scores=None, labels=None, poslabel=None, quiet=False):
         '''FullROC constructor. If predicted_scores and labels are empty then it returns an empty object.'''
 
@@ -37,18 +22,6 @@ class FullROC(SimpleROC):
             self.full_newlabels    = None
             self.full_slope_factor = None
         #endif
-
-        # self.predicted_scores
-        # self.labels
-        # self.fpr
-        # self.tpr
-        # self.thresholds
-        #
-        # self.poslabel
-        # self.newposlabel
-        # self.newlabels
-        # self.AUC
-        # self.C
     #enddef
 
     def construct(self, labels, scores, posclass):

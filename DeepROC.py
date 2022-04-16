@@ -3,63 +3,14 @@
 # by André Carrington
 
 from FullROC           import FullROC
-from ConcordanceMatrixPlot import ConcordanceMatrixPlot
 
 class DeepROC(FullROC):
-
-    #    inherited from SimpleROC...
-    # getC()
-    # set_scores_labels()
-
-    #    inherited from FullROC...
-    # __init__()    constructor
-    # get()
-    # getAUC()
-    # plot()
-    # plotConcordanceMatrix()
-    # __str__()     to string
-
-    #    DeepROC...
-    # __init__()    constructor
-    # setGroupsBy()
-    # setPopulationPrevalence()
-
-    # getGroupForAUCi()
-    # getGroupForAUC()
-    # getGroupForC()
-
-    # analyzeGroups()
-    # analyzeWhole()
-    # analyzePoint()
-
-    # plotGroup()
-    # plotGroupsInConcordanceMatrix()
-    # plotPartialArea()
-        
-    # for attributes see the constructor 
 
     def __init__(self, predicted_scores=None, labels=None, poslabel=None, quiet=False):
         '''DeepROC constructor. If predicted_scores and labels are
            empty then it returns an empty object.'''
         
         super().__init__(predicted_scores=predicted_scores, labels=labels, poslabel=poslabel, quiet=quiet)
-
-        #   SimpleROC...
-        # self.predicted_scores
-        # self.labels
-        # self.newlabels
-        # self.fpr
-        # self.tpr
-        # self.thresholds
-        # self.poslabel
-        # self.AUC
-
-        #   Full ROC...
-        # self.full_fpr       
-        # self.full_tpr       
-        # self.full_thresholds
-        # self.full_newlabels
-        # self.full_slope_factor
 
         #   Deep ROC...
         self.interpolation   = None
@@ -114,17 +65,18 @@ class DeepROC(FullROC):
         #endif
         
         if checkIfGroupsArePerfectCoveringSet(groups, groupAxis):
-            print(f'The groups cover {groupAxis} [0,1] and are non-overlapping (a perfect covering set).')
+            # print(f'The groups cover {groupAxis} [0,1] and are non-overlapping (a perfect covering set).')
             self.groupsArePerfectCoveringSet = True
         else:
-            print(f'The groups are not a perfect covering set over {groupAxis} [0,1]')
+            # print(f'The groups are not a perfect covering set over {groupAxis} [0,1]')
             self.groupsArePerfectCoveringSet = False
         #endif
 
         return self.groups
     #enddef
 
-    def getGroupForAUCi(self, groupIndex):
+    def getGroupForAUCi(self, groupIndex, forFolds):
+        import numpy as np
         if self.groups is None:
             SystemError('Must use setGroupsBy() method first.')
         #endif
@@ -140,14 +92,23 @@ class DeepROC(FullROC):
                 rocRuleRight = 'NE'
             # endif
 
-            quiet2 = False
-            rangeEndpoints1 = self.groups[groupIndex]
-            partial_full_fpr, partial_full_tpr, groupByOtherAxis, groupByThreshold, \
+            quiet2 = True
+            group  = self.groups[groupIndex]
+            if forFolds:
+                fpr        = self.mean_fpr
+                tpr        = self.mean_tpr
+                thresholds = np.ones(self.mean_fpr.shape)
+            else:
+                fpr        = self.full_fpr
+                tpr        = self.full_tpr
+                thresholds = self.full_thresholds
+            #endif
+            partial_fpr, partial_tpr, groupByOtherAxis, groupByThreshold, \
                 matchedIndices, approxIndices \
-                = self.getGroupForAUC(self.full_fpr, self.full_tpr, self.full_thresholds,
-                                      self.groupAxis, rangeEndpoints1, rocRuleLeft, rocRuleRight, quiet2)
-            return partial_full_fpr, partial_full_tpr, groupByOtherAxis, groupByThreshold, \
-                   matchedIndices, approxIndices, rangeEndpoints1, rocRuleLeft, rocRuleRight
+                = self.getGroupForAUC(fpr, tpr, thresholds, self.groupAxis, group,
+                                      rocRuleLeft, rocRuleRight, quiet2)
+            return partial_fpr, partial_tpr, groupByOtherAxis, groupByThreshold, \
+                   matchedIndices, approxIndices, group, rocRuleLeft, rocRuleRight
         else:
             # to be completed
             return None, None, None, None, None, \
@@ -155,7 +116,7 @@ class DeepROC(FullROC):
         #endif
     #enddef
 
-    def analyzeGroup(self, groupIndex, showData=False, quiet=False):
+    def analyzeGroup(self, groupIndex, showData=False, forFolds=False, quiet=False):
         from Helpers.DeepROCFunctions import partial_C_statistic_simple
         from Helpers.DeepROCFunctions import partial_C_statistic
         from Helpers.DeepROCFunctions import concordant_partial_AUC
@@ -176,9 +137,9 @@ class DeepROC(FullROC):
         #endif
 
         # get group information for AUC
-        partial_full_fpr, partial_full_tpr, groupByOtherAxis, groupByThreshold, \
+        partial_fpr, partial_tpr, groupByOtherAxis, groupByThreshold, \
           matchedIndices, approxIndices, rangeEndpoints1, rocRuleLeft, rocRuleRight = \
-          self.getGroupForAUCi(groupIndex)
+          self.getGroupForAUCi(groupIndex, forFolds=forFolds)
 
         # setup variables for printing group information
         if self.groupAxis == 'FPR':
@@ -194,63 +155,77 @@ class DeepROC(FullROC):
         quiet2 = True
         if showData and not quiet2:
             print(f"{'pfpr':6s}, {'ptpr':6s}")
-            for x, y in zip(partial_full_fpr, partial_full_tpr):
+            for x, y in zip(partial_fpr, partial_tpr):
                 print(f'{x:-6.3g}, {y:-6.3g}')
             # endfor
             print(' ')
         # endif
 
         # get group information for C
-        negIndexC, posIndexC, negScores, posScores, negWeights, posWeights, negWidths, posHeights \
-            = self.getGroupForC(self.full_fpr, self.full_tpr, self.full_thresholds,
-                                self.full_slope_factor, self.predicted_scores, self.full_newlabels,
-                                self.newposlabel, xgroup, ygroup)
+        if forFolds:
+            # for Mean ROC we cannot compute C measures
 
-        # show ROC group boundaries and information
-        if not quiet:
-            showROCinfo(xgroup, ygroup, tgroup, rocRuleLeft, rocRuleRight)
+            # show ROC group boundaries and information
+            if not quiet:
+                showROCinfo(xgroup, ygroup, tgroup, rocRuleLeft, rocRuleRight)
+            # endif
 
-        # show Concordance Matrix group boundaries
-        if not quiet:
-            showConcordanceMatrixInfo(posIndexC, negIndexC, posScores, negScores,
-                                      posWeights, negWeights, rocRuleLeft, rocRuleRight)
+            measure_dict = dict()
 
-        measure_dict = dict()
-
-        # compute measures related to partial C statistic
-        if not self.interpolation:
-            temp_dict1 = partial_C_statistic_simple(posScores, negScores, posWeights, negWeights)
-            temp_dict2 = dict(C_local=None, Ux_count=None, Uy_count=None)
-            # update measure_dict with results
-            measure_dict.update(temp_dict1)
-            measure_dict.update(temp_dict2)
-            # also store results in local variables
-            C_i, C_area_y,  C_area_x, Cn_i, Cn_avgSens, Cn_avgSpec, C_local, Ux_count, Uy_count = \
-                [measure_dict[key] for key in ['C_i', 'C_area_y', 'C_area_x', 'Cn_i', 'Cn_avgSens',
-                                               'Cn_avgSpec', 'C_local', 'Ux_count', 'Uy_count']]
-            # supporting variables
-            whole_area, vertical_stripe_area, horizontal_stripe_area = None, None, None
         else:
-            temp_dict, whole_area, horizontal_stripe_area, vertical_stripe_area = \
-                partial_C_statistic(posScores, negScores, posWeights, negWeights, posIndexC, negIndexC)
-            # update measure_dict with results
-            measure_dict.update(temp_dict)
-            # also store results in local variables
-            C_i, C_area_y,  C_area_x, Cn_i, Cn_avgSens, Cn_avgSpec, C_local, Ux_count, Uy_count = \
-                [measure_dict[key] for key in ['C_i', 'C_area_y', 'C_area_x', 'Cn_i', 'Cn_avgSens',
-                                               'Cn_avgSpec', 'C_local', 'Ux_count', 'Uy_count']]
+            negIndexC, posIndexC, negScores, posScores, negWeights, posWeights, negWidths, posHeights \
+                = self.getGroupForC(self.full_fpr, self.full_tpr, self.full_thresholds,
+                                    self.full_slope_factor, self.predicted_scores, self.full_newlabels,
+                                    self.newposlabel, xgroup, ygroup)
+            # show ROC group boundaries and information
+            if not quiet:
+                showROCinfo(xgroup, ygroup, tgroup, rocRuleLeft, rocRuleRight)
+            #endif
+            # show Concordance Matrix group boundaries
+            if not quiet:
+                showConcordanceMatrixInfo(posIndexC, negIndexC, posScores, negScores,
+                                          posWeights, negWeights, rocRuleLeft, rocRuleRight)
+            #endif
+
+            measure_dict = dict()
+
+            # compute measures related to partial C statistic
+            if not self.interpolation:
+                temp_dict1 = partial_C_statistic_simple(posScores, negScores, posWeights, negWeights)
+                temp_dict2 = dict(C_local=None, Ux_count=None, Uy_count=None)
+                # update measure_dict with results
+                measure_dict.update(temp_dict1)
+                measure_dict.update(temp_dict2)
+                # also store results in local variables
+                C_i, C_area_y,  C_area_x, Cn_i, Cn_avgSens, Cn_avgSpec, C_local, Ux_count, Uy_count = \
+                    [measure_dict[key] for key in ['C_i', 'C_area_y', 'C_area_x', 'Cn_i', 'Cn_avgSens',
+                                                   'Cn_avgSpec', 'C_local', 'Ux_count', 'Uy_count']]
+                # supporting variables
+                whole_area, vertical_stripe_area, horizontal_stripe_area = None, None, None
+            else:
+                temp_dict, whole_area, horizontal_stripe_area, vertical_stripe_area = \
+                    partial_C_statistic(posScores, negScores, posWeights, negWeights, posIndexC, negIndexC)
+                # update measure_dict with results
+                measure_dict.update(temp_dict)
+                # also store results in local variables
+                C_i, C_area_y,  C_area_x, Cn_i, Cn_avgSens, Cn_avgSpec, C_local, Ux_count, Uy_count = \
+                    [measure_dict[key] for key in ['C_i', 'C_area_y', 'C_area_x', 'Cn_i', 'Cn_avgSens',
+                                                   'Cn_avgSpec', 'C_local', 'Ux_count', 'Uy_count']]
+            #endif
+            if not quiet:
+                showCmeasures(groupIndex+1, C_i, C_area_x, C_area_y, Cn_i, Cn_avgSpec, Cn_avgSens,
+                              Ux_count, Uy_count, whole_area, vertical_stripe_area, horizontal_stripe_area)
+            #endif
         #endif
-        if not quiet:
-            showCmeasures(groupIndex+1, C_i, C_area_x, C_area_y, Cn_i, Cn_avgSpec, Cn_avgSens,
-                          Ux_count, Uy_count, whole_area, vertical_stripe_area, horizontal_stripe_area)
 
         # compute measures related to the concordant partial AUC
-        temp_dict = concordant_partial_AUC(partial_full_fpr, partial_full_tpr, quiet)
+        temp_dict = concordant_partial_AUC(partial_fpr, partial_tpr, quiet)
         measure_dict.update(temp_dict)
         AUC_i, pAUC, pAUCx, AUCn_i, pAUCn, pAUCxn = \
             [measure_dict[key] for key in ['AUC_i', 'pAUC', 'pAUCx', 'AUCn_i', 'pAUCn', 'pAUCxn']]
         if not quiet:
             showAUCmeasures(groupIndex+1, AUC_i, pAUC, pAUCx, AUCn_i, pAUCn, pAUCxn)
+        #endif
 
         # for a group spanning the whole ROC plot, show whole measures
         if self.groups[groupIndex][0] == 0 and self.groups[groupIndex][1] == 1:
@@ -258,27 +233,39 @@ class DeepROC(FullROC):
             # note: avoid: AUC = metrics.auc(ffpr, ftpr)
             # it sometimes gives an error: ValueError: x is neither increasing nor decreasing
             # use trapz instead...
-            AUC_full  = np.trapz(self.full_tpr, self.full_fpr)
-            AUC_macro = metrics.roc_auc_score(self.newlabels, self.predicted_scores)  # macro is default
-            AUC_micro = metrics.roc_auc_score(self.newlabels, self.predicted_scores, average='micro')
-            AUPRC     = metrics.average_precision_score(self.newlabels, self.predicted_scores)  # macro is default
-            temp_dict = dict(AUC=self.AUC, AUC_full=AUC_full, AUC_macro=AUC_macro, AUC_micro=AUC_micro, AUPRC=AUPRC)
-            measure_dict.update(temp_dict)
+            if forFolds:
+                AUC_full = np.trapz(self.mean_tpr, self.mean_fpr)
+                temp_dict = dict(AUC_full=AUC_full)
+            else:
+                AUC_full  = np.trapz(self.full_tpr, self.full_fpr)
+                AUC_macro = metrics.roc_auc_score(self.newlabels, self.predicted_scores)  # macro is default
+                AUC_micro = metrics.roc_auc_score(self.newlabels, self.predicted_scores, average='micro')
+                AUPRC     = metrics.average_precision_score(self.newlabels, self.predicted_scores)  # macro is default
+                temp_dict = dict(AUC=self.AUC, AUC_full=AUC_full, AUC_macro=AUC_macro, AUC_micro=AUC_micro, AUPRC=AUPRC)
 
-            if not quiet:
-                showWholeAUCmeasures(self.AUC, AUC_full, AUC_macro, AUC_micro, AUPRC)
+                if not quiet:
+                    showWholeAUCmeasures(self.AUC, AUC_full, AUC_macro, AUC_micro, AUPRC)
+                #endif
+            #endif
+            measure_dict.update(temp_dict)
         #endif
 
         # discrete partial measures next
-
-        # if populationPrevalence not set, then use the whole sample to derive an estimate
-        if self.populationPrevalence == None:
-            self.populationPrevalence = len(posScores) / (len(posScores) + len(negScores))
+        if forFolds:
+            N = self.foldsNPclassRatio / (1 + self.foldsNPclassRatio)
+            P = 1 - N
+            prevalence = P / (P+N)
+        else:
+            # if populationPrevalence not set, then use the whole sample to derive an estimate
+            if self.populationPrevalence == None:
+                prevalence = len(posScores) / (len(posScores) + len(negScores))
+            else:
+                prevalence = self.populationPrevalence
+            # endif
+            N = float(sum(negWeights))  # group sample
+            P = float(sum(posWeights))  # group sample
         #endif
-        N = float(sum(negWeights))  # group sample
-        P = float(sum(posWeights))  # group sample
-        temp_dict = discrete_partial_roc_measures(partial_full_fpr, partial_full_tpr, N, P,
-                                                  self.populationPrevalence)
+        temp_dict = discrete_partial_roc_measures(partial_fpr, partial_tpr, N, P, prevalence)
         measure_dict.update(temp_dict)
         if not quiet:
             showAllMeasures = True
@@ -287,38 +274,42 @@ class DeepROC(FullROC):
 
         # show PAI result only if the group ends at FPR == 0
         if self.groupAxis == 'FPR' and self.groups[groupIndex][0] == 1:
-            PAI = partial_area_index_proxy(partial_full_fpr, partial_full_fpr, quiet)
+            PAI = partial_area_index_proxy(partial_fpr, partial_fpr, quiet)
             measure_dict.update(dict(PAI=PAI))
             if not quiet:
                 print(f"{'PAI':16s} = {PAI:0.4f}  only applies to full or last range")
             # endif
         # endif
 
-        # check for expected equalities
-        ep    = 1 * (10 ** -12)
-        pass1 = areEpsilonEqual(C_i,  AUC_i,   'C_i',  'AUC_i', ep, quiet)
-        pass2 = areEpsilonEqual(Cn_i, AUCn_i, 'Cn_i', 'AUCn_i', ep, quiet)
+        if not forFolds:
+            # check for expected equalities
+            ep    = 1 * (10 ** -12)
+            pass1 = areEpsilonEqual(C_i,  AUC_i,   'C_i',  'AUC_i', ep, quiet)
+            pass2 = areEpsilonEqual(Cn_i, AUCn_i, 'Cn_i', 'AUCn_i', ep, quiet)
 
-        if matchedIndices[0] != 'NA' and matchedIndices[1] != 'NA':
-            pass3 = areEpsilonEqual(measure_dict['bAvgA'],   AUCn_i, 'bAvgA',   'AUCn_i', ep, quiet)
-            pass4 = areEpsilonEqual(measure_dict['avgSens'], pAUCn,  'avgSens', 'pAUCn',  ep, quiet)
-        # endif
+            if matchedIndices[0] != 'NA' and matchedIndices[1] != 'NA':
+                pass3 = areEpsilonEqual(measure_dict['bAvgA'],   AUCn_i, 'bAvgA',   'AUCn_i', ep, quiet)
+                pass4 = areEpsilonEqual(measure_dict['avgSens'], pAUCn,  'avgSens', 'pAUCn',  ep, quiet)
+            # endif
 
-        pass5 = areEpsilonEqual(Cn_avgSens, pAUCn, 'Cny_i', 'pAUCn', ep, quiet)
+            pass5 = areEpsilonEqual(Cn_avgSens, pAUCn, 'Cny_i', 'pAUCn', ep, quiet)
 
-        if matchedIndices[0] != 'NA' and matchedIndices[1] != 'NA':
-            pass6 = areEpsilonEqual(measure_dict['avgSpec'], pAUCxn, 'avgSpec', 'pAUCxn', ep, quiet)
-        # endif
+            if matchedIndices[0] != 'NA' and matchedIndices[1] != 'NA':
+                pass6 = areEpsilonEqual(measure_dict['avgSpec'], pAUCxn, 'avgSpec', 'pAUCxn', ep, quiet)
+            # endif
 
-        pass7 = areEpsilonEqual(Cn_avgSpec, pAUCxn, 'Cnx_i', 'pAUCxn', ep, quiet)
+            pass7 = areEpsilonEqual(Cn_avgSpec, pAUCxn, 'Cnx_i', 'pAUCxn', ep, quiet)
 
-        if matchedIndices[0] != 'NA' and matchedIndices[1] != 'NA':
-            iterationPassed = pass1 and pass2 and pass3 and pass4 and pass5 and pass6 and pass7
+            if matchedIndices[0] != 'NA' and matchedIndices[1] != 'NA':
+                iterationPassed = pass1 and pass2 and pass3 and pass4 and pass5 and pass6 and pass7
+            else:
+                iterationPassed = pass1 and pass2 and pass5 and pass7
+            # endif
+
+            return iterationPassed, measure_dict
         else:
-            iterationPassed = pass1 and pass2 and pass5 and pass7
-        # endif
-
-        return iterationPassed, measure_dict
+            return True, measure_dict
+        #endif
     #enddef
 
     def analyze(self):
@@ -332,7 +323,7 @@ class DeepROC(FullROC):
         numgroups = len(self.groups)
         for i in range(0, numgroups):
             print(f'\nGroup {i + 1}:')
-            iterationPassed, iteration_dict = self.analyzeGroup(i, showData=True, quiet=False)
+            iterationPassed, iteration_dict = self.analyzeGroup(i, showData=True, forFolds=False, quiet=False)
             measure_dict = measure_dict + [iteration_dict]
             # add up parts as you go
             if self.groupsArePerfectCoveringSet:
@@ -365,29 +356,60 @@ class DeepROC(FullROC):
 
     # plot() is in the superclass FullROC
 
+    def plotGroupForFolds(self, plotTitle, groupIndex, foldsNPclassRatio, showError=False, showThresholds=True,
+                          showOptimalROCpoints=True, costs=None, saveFileName=None, numShowThresh=20,
+                          showPlot=True, labelThresh=True, full_fpr_tpr=True):
+        '''plotGroupForFolds shows a mean ROC plot for a contiguous group (any group except by instance).'''
+        forFolds = True
+        return self.plotGroupInternalLogic(plotTitle, groupIndex, foldsNPclassRatio,
+                                       forFolds=forFolds, showError=showError,
+                                       showThresholds=showThresholds, showOptimalROCpoints=showOptimalROCpoints,
+                                       costs=costs, saveFileName=saveFileName, numShowThresh=numShowThresh,
+                                       showPlot=showPlot, labelThresh=labelThresh, full_fpr_tpr=full_fpr_tpr)
+
+    #enddef
+
     def plotGroup(self, plotTitle, groupIndex, showError=False, showThresholds=True, showOptimalROCpoints=True,
-                  costs=None, saveFileName=None, numShowThresh=30, showPlot=True, labelThresh=True,
+                  costs=None, saveFileName=None, numShowThresh=20, showPlot=True, labelThresh=True,
                   full_fpr_tpr=True):
-        '''plotGroups shows ROC plots for contiguous groups (any groups except by instance).'''
+        '''plotGroup shows an ROC plot for a contiguous groups (any group except by instance).'''
+        forFolds = False
+        foldsNPclassRatio = None
+        return self.plotGroupInternalLogic(plotTitle, groupIndex, foldsNPclassRatio, forFolds=forFolds,
+                                    showError=showError,
+                                    showThresholds=showThresholds, showOptimalROCpoints=showOptimalROCpoints,
+                                    costs=costs, saveFileName=saveFileName, numShowThresh=numShowThresh,
+                                    showPlot=showPlot, labelThresh=labelThresh, full_fpr_tpr=full_fpr_tpr)
+    #enddef
+
+    def plotGroupInternalLogic(self, plotTitle, groupIndex, foldsNPclassRatio, forFolds=False, showError=False,
+                               showThresholds=True, showOptimalROCpoints=True, costs=None, saveFileName=None,
+                               numShowThresh=20, showPlot=True, labelThresh=True, full_fpr_tpr=True):
         import matplotlib.pyplot as plt
         import math
-        from Helpers.ROCPlot      import addPoints
-        from Helpers.ROCPlot      import plotOpt
-        from Helpers.ROCFunctions import getSkew
+        import numpy as np
+        from Helpers.ROCPlot      import addPointsAndLabels
+        from Helpers.ROCPlot      import plotOptimalPointWithThreshold
+        from Helpers.ROCFunctions import getSlopeOrSkew
         from Helpers.ROCFunctions import optimal_ROC_point_indices
         from Helpers.DeepROCPlot  import plotPartialArea
 
         # plot full ROC data for whole and partial curve
         # with thresholds labeled and the Metz optimal ROC point(s) indicated
 
-        # fancyLabel = False  # we apply points and score labels later, not now
-        showInterimPlot = False
-        self.plot(plotTitle, showThresholds, showOptimalROCpoints, costs,
-                            saveFileName, numShowThresh, showInterimPlot, labelThresh, full_fpr_tpr)
-
-        if self.groupAxis == 'Threshold':
-            SystemError('Plot not available for groups by Threshold at this time.')
+        if forFolds and self.groupAxis == 'Threshold':
+            ValueError('Mean ROC plots do not have Thresholds, use Percentiles instead.')
+        elif not forFolds and self.groupAxis == 'Threshold':
+            ValueError('Plot not available for groups by Threshold at this time.')
         # endif
+
+        showInterimPlot = False
+        if forFolds:
+            fig, ax = self.plot_folds(plotTitle, saveFileName=saveFileName, showPlot=showInterimPlot)
+        else:
+            fig, ax = self.plot(plotTitle, showThresholds, showOptimalROCpoints, costs, saveFileName,
+                                numShowThresh, showInterimPlot, labelThresh, full_fpr_tpr)
+        #endif
 
         if self.groups[groupIndex][0] == 0:
             rocRuleLeft  = 'SW'
@@ -399,32 +421,61 @@ class DeepROC(FullROC):
 
         if self.groupAxis == 'TPR' or self.groupAxis == 'FPR':
             quiet = True
-            rangeEndpoints1 = self.groups[groupIndex]
-            partial_full_fpr, partial_full_tpr, groupByOtherAxis, groupByThreshold, \
-            matchedIndices, approxIndices \
-                = self.getGroupForAUC(self.full_fpr, self.full_tpr, self.full_thresholds,
-                                      self.groupAxis, rangeEndpoints1, rocRuleLeft, rocRuleRight, quiet)
+            if forFolds:
+                fpr = self.mean_fpr
+                tpr = self.mean_tpr
+                thresholds = np.ones(self.mean_fpr.shape)  # dummy thresholds
+            else:
+                if self.full_thresholds == None:
+                    fpr = self.mean_fpr
+                    tpr = self.mean_tpr
+                    thresholds = np.ones(self.mean_fpr.shape)  # dummy thresholds
+                else:
+                    fpr = self.full_fpr
+                    tpr = self.full_tpr
+                    thresholds = self.full_thresholds
+                #endif
+            #endif
 
-            # add fills for partial areas (clobbers points, score labels)
-            #self.plotPartialArea(partial_full_fpr, partial_full_tpr, showError)
-            plotPartialArea(partial_full_fpr, partial_full_tpr, showError)
+            partial_fpr, partial_tpr, groupByOtherAxis, groupByThreshold, matchedIndices, approxIndices \
+                = self.getGroupForAUC(fpr, tpr, thresholds, self.groupAxis, self.groups[groupIndex],
+                                      rocRuleLeft, rocRuleRight, quiet)
 
-            # add points and score labels
-            fancyLabel = True  # now we apply the points and score labels
-            addPoints(self.full_fpr, self.full_tpr, numShowThresh, self.full_thresholds, fancyLabel)
+            # add fills for partial areas (the fills clobber any points or labels)
+            plotPartialArea(partial_fpr, partial_tpr, showError)
+
+            if not forFolds:
+                fancyLabel = True
+                addPointsAndLabels(fpr, tpr, numShowThresh, thresholds, fancyLabel)
+            #endif
         # endif
 
         if showOptimalROCpoints:
-            skew = getSkew(self.full_newlabels, self.poslabel, costs)
-            opt_indices = optimal_ROC_point_indices(self.full_fpr, self.full_tpr, skew)
-            # for plotOpt...
-            if not math.isinf(self.full_thresholds[0]):
-                maxThreshold = self.full_thresholds[0]  # if first (max) thresh is not infinite, then use it for label
+            if forFolds:
+                slopeOrSkew = getSlopeOrSkew(foldsNPclassRatio, costs)
+                N   = foldsNPclassRatio / (1 + foldsNPclassRatio)
+                P   = 1 - N
+                prevalence  = P / (P + N)
+                opt_indices = optimal_ROC_point_indices(fpr, tpr, slopeOrSkew)
+                plt.scatter(fpr[opt_indices], tpr[opt_indices], s=30, marker='o', alpha=1, facecolors='w',
+                            edgecolors='r')
             else:
-                maxThreshold = self.full_thresholds[1]  # otherwise, use the next label which should be finite
-            # endif
-            plotOpt(self.full_fpr[opt_indices], self.full_tpr[opt_indices],
-                              self.full_thresholds[opt_indices], maxThreshold, fancyLabel)
+                P = int(sum(self.full_newlabels))
+                N = len(self.full_newlabels) - P
+                prevalence  = P / (P + N)
+                slopeOrSkew = getSlopeOrSkew(N / P, costs)
+                opt_indices = optimal_ROC_point_indices(fpr, tpr, slopeOrSkew)
+
+                if not math.isinf(thresholds[0]):
+                    maxThreshold = thresholds[0]  # if first (max) thresh is not infinite,
+                                                  # then use it for label
+                else:
+                    maxThreshold = thresholds[1]  # otherwise, use the next label which is finite
+                # endif
+                fancyLabel = True
+                plotOptimalPointWithThreshold(fpr[opt_indices], tpr[opt_indices], thresholds[opt_indices],
+                                              maxThreshold, fancyLabel)
+            #endif
         # endif
 
         if self.__class__.__name__ == 'ChanceROC' or \
@@ -432,7 +483,7 @@ class DeepROC(FullROC):
             from Helpers.BayesianROCFunctions import plot_major_diagonal
             from Helpers.BayesianROCFunctions import plot_bayesian_iso_line
             plot_major_diagonal()
-            plot_bayesian_iso_line(self.prevalenceToPlot, costs, self.priorToPlot)
+            plot_bayesian_iso_line(prevalence, costs, self.BayesianPrior)
         #endif
 
         plt.xlim(0.0, 1.0)
@@ -445,11 +496,11 @@ class DeepROC(FullROC):
         # modeShort = mode[:-3]  # training -> train, testing -> test
         # fig.savefig(f'output/ROC_{modeShort}_{testNum}-{index}.png')
 
-        return
+        return fig, ax
     #enddef
 
     def plotGroupInConcordanceMatrix(self, plotTitle, showThresholds=True, showOptimalROCpoints=True,
-                                      costs=None, saveFileName=None, numShowThresholds=30, showPlot=True):
+                                      costs=None, saveFileName=None, numShowThresholds=20, showPlot=True):
         '''plots a Concordance Matrix for contiguous groups (any groups except by instance).'''
         from ConcordanceMatrixPlot import ConcordanceMatrixPlot
 
@@ -468,80 +519,6 @@ class DeepROC(FullROC):
     #     # to be completed...
     #     return False
     #enddef
-
-    def plotPartialArea(self, pfpr, ptpr, showError):
-        # plot partial areas in ROC plots or concordance matrix plots
-        import matplotlib.pyplot as plt
-
-        # define lines for partial area: left line (ll), right line (rl),
-        #                                bottom line (bl), top line (tl)
-        SWpoint_yStripe = [pfpr[0], 0]
-        NWpoint_yStripe = [pfpr[0], 1]
-        NEpoint_yStripe = [pfpr[-1], 1]
-        SEpoint_yStripe = [pfpr[-1], 0]
-        #
-        SWpoint_xStripe = [0, ptpr[0]]
-        NWpoint_xStripe = [0, ptpr[-1]]
-        NEpoint_xStripe = [1, ptpr[-1]]
-        SEpoint_xStripe = [1, ptpr[0]]
-        #
-        # take sequences of x and y (horizontal or vertical) and plot them...
-        plotLine    = lambda x, y: plt.plot(x, y, '--', color=(0.5, 0.5, 0.5), linewidth=1.5)
-        plotpAUCy   = lambda x, y: plt.fill(x, y, 'xkcd:yellow', alpha=0.5, linewidth=None)
-        plotpAUCx   = lambda x, y: plt.fill(x, y, 'b', alpha=0.4, linewidth=None)
-        plotClear   = lambda x, y: plt.fill(x, y, 'w', linewidth=None)
-        plotpAUCxy  = lambda x, y: plt.fill(x, y, 'g', alpha=0.4, linewidth=None)
-        plotError   = lambda x, y: plt.fill(x, y, 'r', alpha=0.25, linewidth=None)
-        plotErrorxy = lambda x, y: plt.fill(x, y, 'r', alpha=0.35, linewidth=None)
-        #
-        # plot vertical stripe lines
-        plotLine([SWpoint_yStripe[0], NWpoint_yStripe[0]], [SWpoint_yStripe[1], NWpoint_yStripe[1]])
-        plotLine([SEpoint_yStripe[0], NEpoint_yStripe[0]], [SEpoint_yStripe[1], NEpoint_yStripe[1]])
-
-        # plot vertical AUCy in muted yellow
-        x = pfpr + [SEpoint_yStripe[0]] + [SWpoint_yStripe[0]] + [pfpr[0]]
-        y = ptpr + [SEpoint_yStripe[1]] + [SWpoint_yStripe[1]] + [ptpr[0]]
-        plotpAUCy(x, y)
-
-        # plot vertical   Error in light orange
-        if showError:
-            x = [NWpoint_yStripe[0]] + [NEpoint_yStripe[0]] + [NEpoint_yStripe[0]] + [NWpoint_yStripe[0]]
-            y = [NWpoint_xStripe[1]] + [NEpoint_xStripe[1]] + [NEpoint_yStripe[1]] + [NWpoint_yStripe[1]]
-            plotError(x, y)
-        # endif
-
-        # plot horizontal stripe lines
-        plotLine([SWpoint_xStripe[0], SEpoint_xStripe[0]], [SWpoint_xStripe[1], SEpoint_xStripe[1]])
-        plotLine([NWpoint_xStripe[0], NEpoint_xStripe[0]], [NWpoint_xStripe[1], NEpoint_xStripe[1]])
-
-        # plot horizontal AUCx in slightly muted blue
-        x = pfpr + [NEpoint_xStripe[0]] + [SEpoint_xStripe[0]] + [pfpr[0]]
-        y = ptpr + [NEpoint_xStripe[1]] + [SEpoint_xStripe[1]] + [ptpr[0]]
-        plotpAUCx(x, y)
-
-        # plot horizontal Error in light orange
-        if showError:
-            x = [SWpoint_xStripe[0]] + [SWpoint_yStripe[0]] + [NWpoint_yStripe[0]] + [NWpoint_xStripe[0]]
-            y = [SWpoint_xStripe[1]] + [SEpoint_xStripe[1]] + [NEpoint_xStripe[1]] + [NWpoint_xStripe[1]]
-            plotError(x, y)
-        # endif
-
-        # plot overlap in AUCxy as muted green; pAUCc = pAUCx + pAUCy + pAUCxy
-        x = pfpr + [SEpoint_yStripe[0]] + [pfpr[0]]
-        y = ptpr + [SEpoint_xStripe[1]] + [ptpr[0]]
-        plotClear(x, y)  # first clear overlap area (using white)
-        plotpAUCxy(x, y)  # then plot/fill muted green
-        plt.plot(pfpr, ptpr, 'b-', linewidth=2)  # replot the partial curve
-        #
-        # plot overlap    Error in light red
-        if showError:
-            x = pfpr + [NWpoint_yStripe[0]] + [pfpr[0]]
-            y = ptpr + [NWpoint_xStripe[1]] + [ptpr[0]]
-            plotErrorxy(x, y)
-        # endif
-
-        return
-    # enddef
 
     def getGroupForAUC(self, ffpr, ftpr, fthresh, rangeAxis1, rangeEndpoints1,
                        rocRuleLeft, rocRuleRight, quiet):
