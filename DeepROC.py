@@ -426,15 +426,9 @@ class DeepROC(FullROC):
                 tpr = self.mean_tpr
                 thresholds = np.ones(self.mean_fpr.shape)  # dummy thresholds
             else:
-                if self.full_thresholds == None:
-                    fpr = self.mean_fpr
-                    tpr = self.mean_tpr
-                    thresholds = np.ones(self.mean_fpr.shape)  # dummy thresholds
-                else:
-                    fpr = self.full_fpr
-                    tpr = self.full_tpr
-                    thresholds = self.full_thresholds
-                #endif
+                fpr = self.full_fpr
+                tpr = self.full_tpr
+                thresholds = self.full_thresholds
             #endif
 
             partial_fpr, partial_tpr, groupByOtherAxis, groupByThreshold, matchedIndices, approxIndices \

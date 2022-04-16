@@ -324,22 +324,29 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         pred_proba  = trainer.predict_proba(X_test)
         pred_proba  = pred_proba[:, 1]
 
-        fpr, tpr, threshold = roc_curve(y_test, pred_proba)
-        ROC.set_scores_labels(predicted_scores=pred_proba, labels=y_test, poslabel=1)
+        #fpr, tpr, threshold = roc_curve(y_test, pred_proba)
+        ROCtest    = BayesianROC(predicted_scores=pred_proba, labels=y_test, poslabel=1, BayesianPrior=(0.5, 0.5),
+                               costs=newcosts, quiet=True)
+        # groupAxis  = 'FPR'
+        # groups     = [[0, 0.15], [0, 0.023], [0, 1]]
+        ROCtest.setGroupsBy(groupAxis=groupAxis, groups=groups, groupByClosestInstance=False)
+        groupIndex = 0
         #ROC.set_fpr_tpr(fpr=fpr, tpr=tpr)
-        testAUC = ROC.getAUC()
-        # fig3, ax3 = ROC.plotGroup(plotTitle, groupIndex, showError=False, showThresholds=True,
-        #                           showOptimalROCpoints=True, costs=newcosts, saveFileName=None,
-        #                           numShowThresh=20, showPlot=False, labelThresh=True, full_fpr_tpr=True)
+        testAUC   = ROCtest.getAUC()
+        fpr, tpr, thresholds  = ROCtest.full_fpr, ROCtest.full_tpr, ROCtest.full_thresholds
+        plotTitle  = f'Test ROC for {name} highlighting group {groupIndex+1}'
+        fig3, ax3 = ROCtest.plotGroup(plotTitle, groupIndex, showError=False, showThresholds=True,
+                                      showOptimalROCpoints=True, costs=newcosts, saveFileName=None,
+                                      numShowThresh=20, showPlot=False, labelThresh=True, full_fpr_tpr=True)
 
         optimal_indices = optimal_ROC_point_indices(fpr, tpr, slopeOrSkew)
-        # plt.scatter(fpr[optimal_indices], tpr[optimal_indices], s=30, marker='o', alpha=1, facecolors='w',
-        #             edgecolors='r')
-        # plotFileName = f'ROC_Test_{name}_{testNum}'
-        # fig3.savefig(f'{output_dir}/{plotFileName}.png')
+        plt.scatter(fpr[optimal_indices], tpr[optimal_indices], s=30, marker='o', alpha=1, facecolors='w',
+                    edgecolors='r')
+        plotFileName = f'ROC_Test_{name}_{testNum}'
+        fig3.savefig(f'{output_dir}/{plotFileName}.png')
 
         # for accuracy, choose one of the "overall" optimal thresholds, i.e., it may not be in the ROI
-        opt_threshold = threshold[optimal_indices[0]]  # arbitrarily choose the first
+        opt_threshold = thresholds[optimal_indices[0]]  # arbitrarily choose the first
         pred          = pred_proba.copy()
         pred[pred <  opt_threshold] = 0
         pred[pred >= opt_threshold] = 1

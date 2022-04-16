@@ -41,6 +41,20 @@ class SimpleROC(object):
         #endif
     #enddef
 
+    def get_fpr_tpr(self):
+        from sklearn.metrics import roc_curve
+        ''' Computes and returns the AUC or AUROC (a continuous measure)'''
+        if self.fpr is not None and self.tpr is not None:
+            return self.fpr, self.tpr
+        #endif
+        if self.predicted_scores is not None and self.newlabels is not None:
+            self.fpr, self.tpr, self.thresholds = roc_curve(self.newlabels, self.predicted_scores)
+            return self.fpr, self.tpr
+        else:
+            SystemError('Predicted scores and labels, or FPR and TPR, are required to compute the AUC.')
+        #endif
+    #enddef
+
     def getAUC(self):
         ''' Computes and returns the AUC or AUROC (a continuous measure)'''
         import sklearn.metrics as metrics
@@ -111,7 +125,7 @@ class SimpleROC(object):
             print(f'Warning from plot(): {msg}')
         #endif
 
-        if self.__class__.__name__ == 'SimpleROC' or not full_fpr_tpr or self.full_thresholds == None:
+        if self.__class__.__name__ == 'SimpleROC' or not full_fpr_tpr:
             fpr         = self.fpr
             tpr         = self.tpr
             thresholds  = self.thresholds
