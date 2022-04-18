@@ -9,8 +9,5 @@ Simple ROC, a class for ROC and mean ROC plots and analysis
  
 ConcordanceMatrixPlot (has an ROC object, any of the above), plots the Concordance Matrix  
 
-TestChanceROC.py, creates a BayesianROC object and performs tests for the Chance ROC paper    
-Alter parameters at the start of the file.  
-  
-For all the interactive input questions, just hit enter to accept the defaults and only change the costs to what you want.
+TestChanceROC.py, creates a BayesianROC object and performs tests for the Chance ROC paper. For all the interactive input questions, just hit enter to accept the defaults and only change the costs to what you want.
   
