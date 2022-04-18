@@ -78,8 +78,8 @@ def plotConcordanceMatrix(fpr, tpr, negScores, posScores, plotTitle, maxInstance
     plt.xlabel(f' \nNegative Instances{nsuffix}')
     plt.ylabel(f'Positive Instances{psuffix}\n \n ')
     plt.title(plotTitle)
-    plt.xlim(0.0, 1.0)
-    plt.ylim(0.0, 1.0)
+    plt.xlim(-0.01, 1.0)
+    plt.ylim(0.0, 1.01)
     ax.axes.xaxis.set_major_locator(ticker.MultipleLocator(1/show_ntotal))
     ax.axes.yaxis.set_major_locator(ticker.MultipleLocator(1/show_ptotal))
     plt.grid(True)
@@ -122,6 +122,7 @@ def addPoints(fpr, tpr, numThresh, thresh, fancyLabel):
     # add threshold labels and circles
     # allow up to numThresh labels per plot, or numThresh+4 in the first multiple
     import math
+    import matplotlib.pyplot as plt
 
     if not math.isinf(thresh[0]):
         maxThresh = thresh[0]  # if first (max) thresh is not infinite, then use it for label

@@ -23,7 +23,8 @@ def plotPartialArea(pfpr, ptpr, showError):
     SEpoint_xStripe = [1, ptpr[0] ]
     #
     # take sequences of x and y (horizontal or vertical) and plot them...
-    plotLine   = lambda x, y: plt.plot(x, y, '--',    color=(0.5, 0.5, 0.5),    linewidth=1.5)
+    plotLine   = lambda x, y: plt.plot(x, y, '--',     color=(0.5, 0.5, 0.5),   linewidth=1.5)
+    plotLine2  = lambda x, y: plt.plot(x, y, '-',      color='black',           linewidth=0.25)
     plotpAUCy  = lambda x, y: plt.fill(x, y, 'xkcd:yellow', alpha=0.5,          linewidth=None)
     plotpAUCx  = lambda x, y: plt.fill(x, y, 'b',      alpha=0.4,               linewidth=None)
     plotClear  = lambda x, y: plt.fill(x, y, 'w',                               linewidth=None)
@@ -34,6 +35,8 @@ def plotPartialArea(pfpr, ptpr, showError):
     # plot vertical stripe lines
     plotLine([SWpoint_yStripe[0], NWpoint_yStripe[0]], [SWpoint_yStripe[1], NWpoint_yStripe[1]])
     plotLine([SEpoint_yStripe[0], NEpoint_yStripe[0]], [SEpoint_yStripe[1], NEpoint_yStripe[1]])
+    plotLine2([SWpoint_yStripe[0], NWpoint_yStripe[0]], [SWpoint_yStripe[1], NWpoint_yStripe[1]])
+    plotLine2([SEpoint_yStripe[0], NEpoint_yStripe[0]], [SEpoint_yStripe[1], NEpoint_yStripe[1]])
 
     # plot vertical AUCy in muted yellow
     x = pfpr + [SEpoint_yStripe[0]] + [SWpoint_yStripe[0]] + [pfpr[0]]
@@ -50,6 +53,8 @@ def plotPartialArea(pfpr, ptpr, showError):
     # plot horizontal stripe lines
     plotLine([SWpoint_xStripe[0], SEpoint_xStripe[0]], [SWpoint_xStripe[1], SEpoint_xStripe[1]])
     plotLine([NWpoint_xStripe[0], NEpoint_xStripe[0]], [NWpoint_xStripe[1], NEpoint_xStripe[1]])
+    plotLine2([SWpoint_xStripe[0], SEpoint_xStripe[0]], [SWpoint_xStripe[1], SEpoint_xStripe[1]])
+    plotLine2([NWpoint_xStripe[0], NEpoint_xStripe[0]], [NWpoint_xStripe[1], NEpoint_xStripe[1]])
 
     # plot horizontal AUCx in slightly muted blue
     x = pfpr + [NEpoint_xStripe[0]] + [SEpoint_xStripe[0]] + [pfpr[0]]

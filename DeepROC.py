@@ -451,7 +451,7 @@ class DeepROC(FullROC):
                 P   = 1 - N
                 prevalence  = P / (P + N)
                 opt_indices = optimal_ROC_point_indices(fpr, tpr, slopeOrSkew)
-                plt.scatter(fpr[opt_indices], tpr[opt_indices], s=30, marker='o', alpha=1, facecolors='w',
+                plt.scatter(fpr[opt_indices], tpr[opt_indices], s=40, marker='o', alpha=1, facecolors='w', lw=2,
                             edgecolors='r')
             else:
                 P = int(sum(self.full_newlabels))
@@ -480,8 +480,8 @@ class DeepROC(FullROC):
             plot_bayesian_iso_line(prevalence, costs, self.BayesianPrior)
         #endif
 
-        plt.xlim(0.0, 1.0)
-        plt.ylim(0.0, 1.0)
+        plt.xlim(-0.01, 1.0)
+        plt.ylim(0.0, 1.01)
 
         if showPlot:
             plt.show()

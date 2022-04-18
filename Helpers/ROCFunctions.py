@@ -158,7 +158,8 @@ def getSlopeOrSkew(NPclassRatio, costs, quiet=True):
         skew = NPclassRatio * (cFP - cTN) / (cFN - cTP)
 
     else:
-        cFPR, cFNR, cTPR, cTNR = costs['cFPR'], costs['cFNR'], costs['cTPR'], costs['cTNR']
+        cFPR, cFNR, cTPR, cTNR = costs['cFP'], costs['cFN'], costs['cTP'], costs['cTN']
+        # cFPR, cFNR, cTPR, cTNR = costs['cFPR'], costs['cFNR'], costs['cTPR'], costs['cTNR']
 
         if cFPR is None:
             msg = msg + f'\nCost of a false positive rate unit (cFPR): 1 (default, since unspecified)'

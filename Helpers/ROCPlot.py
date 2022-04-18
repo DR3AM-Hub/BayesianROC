@@ -32,8 +32,8 @@ def plotROC(fpr, tpr, plotTitle, numThresh, thresh, fancyLabel):
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title(plotTitle)
-    plt.xlim(0.0, 1.0)
-    plt.ylim(0.0, 1.0)
+    plt.xlim(-0.01, 1.0)
+    plt.ylim(0.0, 1.01)
     ax.axes.xaxis.set_major_locator(ticker.MultipleLocator(0.1))
     ax.axes.yaxis.set_major_locator(ticker.MultipleLocator(0.1))
     return fig, ax
@@ -41,9 +41,9 @@ def plotROC(fpr, tpr, plotTitle, numThresh, thresh, fancyLabel):
 
 def plotSimpleROC(fpr,tpr,title):
     import matplotlib.pyplot as plt
-    plt.plot(fpr, tpr)
-    plt.xlim(0.0, 1.0)
-    plt.ylim(0.0, 1.0)
+    plt.plot(fpr, tpr, color="blue", lw=2)
+    plt.xlim(-0.01, 1.0)
+    plt.ylim(0.0, 1.01)
     plt.title(title)
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
@@ -110,8 +110,15 @@ def get_ROC_Curve_Label_Offset_Fontsize(x, y, t, maxThresh, fancyLabel):
 
     # number formatting
     if t < 10:
-        # label    = "{:.2f}".format(t)
-        label = f'{prefix}{t:.2g}{suffix}'
+        # old_label    = "{:.2f}".format(t)
+        if   t == 0:
+            label = f'{prefix}0{suffix}'
+        elif t < 0.01:
+            label = f'{prefix}0.00{suffix}'
+        else:
+            label = f'{prefix}{t:.2g}{suffix}'
+            #label = f'{prefix}{t:.2f}{suffix}'
+        #endif
     else:
         t          = int(round(t))
         label = f'{prefix}{t:.2d}{suffix}'
@@ -148,7 +155,7 @@ def plotOptimalPointWithThreshold(fpr_opt, tpr_opt, thresh_opt, maxThresh, fancy
     import matplotlib.pyplot as plt
 
     # plot optimal ROC points
-    plt.scatter(fpr_opt, tpr_opt, s=30, marker='o', alpha=1, facecolors='w', edgecolors='r')
+    plt.scatter(fpr_opt, tpr_opt, s=40, marker='o', alpha=1, facecolors='w', lw=2, edgecolors='r')
     for fpr, tpr, thresh in zip(fpr_opt, tpr_opt, thresh_opt):
         label, offset, fontsize = get_ROC_Curve_Label_Offset_Fontsize(fpr, tpr, thresh, maxThresh, fancyLabel)
         if fancyLabel:

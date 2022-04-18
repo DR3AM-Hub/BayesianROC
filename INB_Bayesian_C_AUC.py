@@ -120,9 +120,9 @@ def plot_roc(title, fpr, tpr, roc_auc, optimal_score_pt, neg, pos, costs):
     plt.plot(fpr, tpr, color='darkorange',
              lw=linewidth, label='ROC curve (area = %0.2f)' % roc_auc)
     plt.plot([0, 1], [0, 1], color='navy', lw=linewidth, linestyle='--')
-    plt.xlim([0.0, 1.0])
+    plt.xlim([-0.01, 1.0])
     #plt.ylim([0.0, 1.05])
-    plt.ylim([0.0, 1.0])
+    plt.ylim([0.0, 1.01])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title(title)

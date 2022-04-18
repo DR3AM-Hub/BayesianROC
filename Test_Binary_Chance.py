@@ -45,6 +45,9 @@ pArea_settings, bAUC_settings, costs, pcosts = ba.getInputsFromUser()
 print(f'\npArea_settings: {pArea_settings}')
 print(f'bAUC_settings: {bAUC_settings}')
 print(f'costs: {costs}')
+dropSizeTexture = False
+dropSize        = False
+dropShape       = False
 
 # Load Wisconsin Breast Cancer data and do some data wrangling
 data = pd.read_csv("data.csv")
@@ -56,6 +59,35 @@ print("\nThe data frame has {0[0]} rows and {0[1]} columns.".format(data.shape))
 print('\nRemoving the last column and the id column')
 data.drop(data.columns[[-1]], axis=1, inplace=True)
 data.drop(['id'], axis=1, inplace=True)
+if dropSizeTexture or dropSize:
+    c = 0
+    if dropSize:
+        features = ['radius', 'perimeter', 'area']
+        print(f'Dropped the size features ({c} in total).')
+    else:
+        features = ['radius', 'texture', 'perimeter', 'area']
+        print(f'Dropped the size and texture features ({c} in total).')
+    #endif
+    for feature in features:
+        for suffix in ['_mean', '_se', '_worst']:
+            data.drop([feature + suffix], axis=1, inplace=True)
+            c += 1
+        #endfor
+    #endfor
+#endif
+
+if dropShape:
+    c = 0
+    features = ['smoothness', 'compactness', 'concavity', 'concave points', 'symmetry', 'fractal_dimension']
+    for feature in features:
+        for suffix in ['_mean', '_se', '_worst']:
+            data.drop([feature + suffix], axis=1, inplace=True)
+            c += 1
+        #endfor
+    #endfor
+    print(f'Dropped the shape features ({c} in total).')
+#endif
+
 # data.head(5)
 
 target       = "diagnosis"
@@ -73,7 +105,20 @@ patients = len(y)
 pos      = len(y[y == 1])
 neg      = len(y[y == 0])
 print(f'\nThe data have {patients} diagnoses, {pos} malignant and {neg} benign.')
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+random_state = 25
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=random_state)
+print(f'The test split random seed is {random_state}')
+
+def compute_Acc_CostWeightedAcc(thresh, prevalence, newcosts, pred_proba, y_test):
+    from Helpers.pointMeasures import classification_point_measures
+    pred       = pred_proba.copy()
+    pred[pred <  thresh] = 0
+    pred[pred >= thresh] = 1
+    conf       = confusion_matrix(y_test, pred)
+    print(conf)
+    measure    = classification_point_measures(conf, prevalence, newcosts)
+    return measure['Acc'], measure['cwAcc'], measure['fixed_costs']
+#enddef
 
 def get_trainer(param, class_weight = None):
         if   param == 'cart_entropy':
@@ -121,9 +166,9 @@ def plot_roc(title, fpr, tpr, roc_auc, optimal_score_pt, neg, pos, costs):
     plt.plot(fpr, tpr, color='darkorange',
              lw=linewidth, label='ROC curve (area = %0.2f)' % roc_auc)
     plt.plot([0, 1], [0, 1], color='navy', lw=linewidth, linestyle='--')
-    plt.xlim([0.0, 1.0])
+    plt.xlim([-0.01, 1.0])
     #plt.ylim([0.0, 1.05])
-    plt.ylim([0.0, 1.0])
+    plt.ylim([0.0, 1.01])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title(title)
@@ -146,6 +191,20 @@ def plot_roc(title, fpr, tpr, roc_auc, optimal_score_pt, neg, pos, costs):
 
 def pretty_print(message):
     print("--> " + message)
+#enddef
+
+def getRange(matchRng, approxRng):
+    if matchRng[0] == 'NA':
+        a = approxRng[0]
+    else:
+        a = matchRng[0]
+    #endif
+    if matchRng[1] == 'NA':
+        b = approxRng[1]
+    else:
+        b = matchRng[1]
+    # endif
+    return [a, b]
 #enddef
 
 # modified a little:
@@ -211,7 +270,8 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
             conf            = confusion_matrix(y_cv_s[f], pred)
 
             # get the measure from the confuion matrix
-            measure         = pm.classification_point_measures(conf)
+            prevalence      = pos / (pos + neg)
+            measure         = pm.classification_point_measures(conf, prevalence=prevalence, costs=newcosts)
             acc             = measure['Acc']
             accs.append(acc)
             acc_indices.append(optimal_indices[0])
@@ -263,7 +323,8 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         optIndicesROI = optimal_ROC_point_indices(pfpr, ptpr, slopeOrSkew)
         pfpr          = np.array(pfpr)
         ptpr          = np.array(ptpr)
-        plt.scatter(pfpr[optIndicesROI], ptpr[optIndicesROI], s=30, marker='o', alpha=1, facecolors='w', edgecolors='b')
+        plt.scatter(pfpr[optIndicesROI], ptpr[optIndicesROI], s=40, marker='o', alpha=1, facecolors='w', lw=2,
+                    edgecolors='b')
         plotFileName = f'MeanROC_CV_Group{groupIndex}_{name}_{testNum}'
         fig1.savefig(f'{output_dir}/{plotFileName}.png')
 
@@ -293,12 +354,12 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         print(f"AUC_b        (- binary chance) is {wholeMeasures['AUCi_pi']:0.3f}")
 
         if name == 'cart_gini':
-            print(f'In negative ROI {groupAxis}={groups[groupIndex2]}')
+            print(f'In the negative ROI {groupAxis}={groups[groupIndex2]} of the Mean ROC plot:')
             print(f"pAUC_b+      (- binary chance) is {groupMeasures2['pAUC_pi_pos']:0.3f}")
             print(f"pAUC_b-      (- binary chance) is {groupMeasures2['pAUC_pi_neg']:0.3f}")
         #endif
 
-        print(f'In the diagnostic ROI {groupAxis}={groups[groupIndex]}')
+        print(f'In the diagnostic ROI {groupAxis}={groups[groupIndex]} of the Mean ROC plot:')
         print(f"AUCn_i                         is {groupMeasures['AUCn_i']:0.3f}")
         print(f"AUCni_d                        is {groupMeasures['AUCni_d']:0.3f}")
         print(f"AUCni_b                        is {groupMeasures['AUCni_pi']:0.3f}")
@@ -327,6 +388,8 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         #fpr, tpr, threshold = roc_curve(y_test, pred_proba)
         ROCtest    = BayesianROC(predicted_scores=pred_proba, labels=y_test, poslabel=1, BayesianPrior=(0.5, 0.5),
                                costs=newcosts, quiet=True)
+        print(f'In the Test ROC plot:')
+
         # groupAxis  = 'FPR'
         # groups     = [[0, 0.15], [0, 0.023], [0, 1]]
         ROCtest.setGroupsBy(groupAxis=groupAxis, groups=groups, groupByClosestInstance=False)
@@ -334,30 +397,71 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         #ROC.set_fpr_tpr(fpr=fpr, tpr=tpr)
         testAUC   = ROCtest.getAUC()
         fpr, tpr, thresholds  = ROCtest.full_fpr, ROCtest.full_tpr, ROCtest.full_thresholds
+        # print(f'fpr {fpr}')
+        # print(f'tpr {tpr}')
+        # print(f'thresholds {thresholds}')
         plotTitle  = f'Test ROC for {name} highlighting group {groupIndex+1}'
         fig3, ax3 = ROCtest.plotGroup(plotTitle, groupIndex, showError=False, showThresholds=True,
                                       showOptimalROCpoints=True, costs=newcosts, saveFileName=None,
                                       numShowThresh=20, showPlot=False, labelThresh=True, full_fpr_tpr=True)
 
         optimal_indices = optimal_ROC_point_indices(fpr, tpr, slopeOrSkew)
-        plt.scatter(fpr[optimal_indices], tpr[optimal_indices], s=30, marker='o', alpha=1, facecolors='w',
+        plt.scatter(fpr[optimal_indices], tpr[optimal_indices], s=40, marker='o', alpha=1, facecolors='w', lw=2,
                     edgecolors='r')
+
+        pfpr, ptpr, _3, _4, matchRng, approxRng = ROCtest.getGroupForAUC(fpr, tpr, thresholds, groupAxis,
+                                                                         groups[groupIndex],
+                                                                         rocRuleLeft, rocRuleRight, quiet)
+        rng = getRange(matchRng, approxRng)
+        # print(f'rng {rng}')
+        pthresh = thresholds[rng[0]:rng[1]+1]
+        # print(f'pfpr {pfpr}')
+        # print(f'ptpr {ptpr}')
+        # print(f'pthresh {pthresh}')
+
+        optIndicesROI = optimal_ROC_point_indices(pfpr, ptpr, slopeOrSkew)
+        pfpr    = np.array(pfpr)
+        ptpr    = np.array(ptpr)
+        pthresh = np.array(pthresh)
+        plt.scatter(pfpr[optIndicesROI], ptpr[optIndicesROI], s=40, marker='o', alpha=1, facecolors='w', lw=2,
+                    edgecolors='b')
+        print(f"Optimal ROC points in the ROI of the Test Plot are:")
+        z = 0
+        for ix in optIndicesROI:
+            print(f"  ({pfpr[optIndicesROI[z]]:0.2f}, {ptpr[optIndicesROI[z]]:0.2f})")
+            z += 1
+
         plotFileName = f'ROC_Test_{name}_{testNum}'
         fig3.savefig(f'{output_dir}/{plotFileName}.png')
 
-        # for accuracy, choose one of the "overall" optimal thresholds, i.e., it may not be in the ROI
-        opt_threshold = thresholds[optimal_indices[0]]  # arbitrarily choose the first
-        pred          = pred_proba.copy()
-        pred[pred <  opt_threshold] = 0
-        pred[pred >= opt_threshold] = 1
-        conf          = confusion_matrix(y_test, pred)
-        measure       = pm.classification_point_measures(conf)
-        testAcc       = measure['Acc']
+        # for Test accuracy, choose one of the "overall" optimal thresholds, i.e., it may not be in the ROI
+        thresh     = thresholds[optimal_indices[0]]  # arbitrarily choose the first
+
+        test_Acc, test_cwAcc, testFixedCosts = compute_Acc_CostWeightedAcc(thresh, prevalence, newcosts,
+                                                                           pred_proba, y_test)
+        print(f"For ROC point:  ({fpr[optimal_indices[0]]:0.2f}, {tpr[optimal_indices[0]]:0.2f})")
+        print(f'test_Acc {test_Acc:0.2f}, test_cwAcc {test_cwAcc:0.2f}, testFixedCosts {testFixedCosts:0.2f}')
+
+        for namep, t, p in zip(['A-', 'A+', 'ROIopt'],
+                               [np.max(thresholds) + 1, np.min(thresholds) - 1, pthresh[optIndicesROI[0]]],
+                               [(0, 0), (1, 1), (fpr[optIndicesROI[0]], tpr[optIndicesROI[0]])]):
+            xAcc, xcwAcc, xFixedCosts = compute_Acc_CostWeightedAcc(t, prevalence, newcosts, pred_proba, y_test)
+            print(f"For ROC point {namep} at ({p[0]:0.2f}, {p[1]:0.2f}), threshold t={t:0.2f}:")
+            print(f'Acc {xAcc:0.2f}, cwAcc {xcwAcc:0.2f}, fixedCosts {xFixedCosts:0.2f}')
+
+        for namep, p in zip(['chance', 'perfect'], [(0.5, 0.5), (0, 1)]):
+            print(f"For ROC point {namep} at ({p[0]:0.2f}, {p[1]:0.2f})")
+            xAcc          = prevalence * p[1] + (1 - prevalence) * p[0]
+            xFixedCosts   = prevalence * newcosts['cFN'] + (1 - prevalence) * newcosts['cTN']
+            xcwAcc        = prevalence * (newcosts['cFN'] - newcosts['cTP']) * p[1] - \
+                            (1 - prevalence) * (newcosts['cFP'] - newcosts['cTN']) * p[0] - \
+                            xFixedCosts
+            print(f'Acc {xAcc:0.2f}, cwAcc {xcwAcc:0.2f}, fixedCosts {xFixedCosts:0.2f}')
 
         transcript.stop()
         plt.show()
         transcript.start(logfn)
-        ret = name, CV_acc, meanAUC, pAUC, AUCi, AUCi_d, AUCi_b, testAcc, testAUC
+        ret = name, CV_acc, meanAUC, pAUC, AUCi, AUCi_d, AUCi_b, test_Acc, testAUC
     #endif
 
     # except (KeyboardInterrupt, SystemExit):

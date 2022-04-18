@@ -6,9 +6,11 @@
 # def regression_point_measures(conf):
 # #enddef
 
-def classification_point_measures(conf):
+def classification_point_measures(conf, prevalence, costs):
     import numpy as np
-    TN, FP, FN, TP = conf.ravel()
+    TN, FP, FN, TP     = conf.ravel()
+    cTN, cFP, cFN, cTP = costs['cTN'], costs['cFP'], costs['cFN'], costs['cTP']
+    neg_prevalence     = 1 - prevalence
     stat         = dict()
     stat['Sens'] = TP/(TP+FN)                          # Sensitivity, True Positive Rate, Recall
     stat['Spec'] = TN/(TN+FP)                          # Specificity, True Negative Rate, Selectivity
@@ -28,11 +30,15 @@ def classification_point_measures(conf):
 
     stat['Acc']  = (TP+TN)/(TP+TN+FP+FN)               # Accuracy
     stat['BAcc'] = (stat['Sens']+stat['Spec'])/0.5     # Balanced Accuracy
-    stat['GAcc'] = (stat['Sens']*stat['Spec'])**0.5    # Geo-Mean Accuracy 
+    stat['GAcc'] = (stat['Sens']*stat['Spec'])**0.5    # Geo-Mean Accuracy
+    # from Metz, equation 6 in my NB paper
+    stat['fixed_costs'] = prevalence * cFN + neg_prevalence * cTN
+    stat['cwAcc']= prevalence * (cFN - cTP) * stat['Sens'] - neg_prevalence * (cFP - cTN) * stat['FPR'] \
+                   - stat['fixed_costs'] \
+
     stat['BPV']  = (stat['PPV'] +stat['NPV'] )/0.5     # Balanced Predictive Value (new definition, previously was a geo-mean)
     stat['GPV']  = (stat['PPV'] *stat['NPV'] )**0.5    # Geo-Mean Balanced Predictive Value
     stat['MC']   = 1 - stat['Acc']                     # Misclassification Cost
-
 
     if (1-stat['Spec']) != 0:
         stat['LR+']  =     stat['Sens'] /(1-stat['Spec'])  # Likelihood Ratio Positive, Likelihood Ratio
