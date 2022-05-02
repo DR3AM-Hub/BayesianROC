@@ -7,27 +7,31 @@
 
 # Imports
 import pandas            as pd
-pd.set_option('display.max_columns', None)
-pd.set_option('display.float_format', lambda x: '%.3f' % x)
 import numpy             as np
 import matplotlib.pyplot as plt
 import random
 import time
 import warnings
-from sklearn.tree            import DecisionTreeClassifier
-from sklearn.ensemble        import AdaBoostClassifier
-from sklearn.naive_bayes     import MultinomialNB
-from sklearn.svm             import LinearSVC
-from sklearn.ensemble        import RandomForestClassifier
-from sklearn.ensemble        import GradientBoostingClassifier
-from sklearn.metrics         import confusion_matrix
-from sklearn.metrics         import classification_report
-from sklearn.metrics         import roc_curve
-from sklearn.model_selection import train_test_split
-from   scipy.interpolate     import interp1d
-from Helpers import areaMeasures as am, bayesianAUC as ba, pointMeasures as pm
-from Helpers import transcript as transcript
-from Helpers import acLogging as log
+from sklearn.tree               import DecisionTreeClassifier
+from sklearn.ensemble           import AdaBoostClassifier
+from sklearn.naive_bayes        import MultinomialNB
+from sklearn.svm                import LinearSVC
+from sklearn.ensemble           import RandomForestClassifier
+from sklearn.ensemble           import GradientBoostingClassifier
+from sklearn.metrics            import confusion_matrix
+from sklearn.metrics            import roc_curve
+from sklearn.model_selection    import train_test_split
+from scipy.interpolate          import interp1d
+
+from deeproc.Helpers.transcript import start as Transcript_start
+from deeproc.Helpers.transcript import stop  as Transcript_stop
+
+from Helpers.bayesianAUC        import getInputsFromUser
+from Helpers.acLogging          import findNextFileNumber
+
+# pandas display option: 3 significant digits and all columns
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+pd.set_option('display.max_columns', None)
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -35,13 +39,13 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 output_dir     = 'output'
 fnprefix       = f'{output_dir}/log_chance_'
 fnsuffix       = '.txt'
-logfn, testNum = log.findNextFileNumber(fnprefix, fnsuffix)
+logfn, testNum = findNextFileNumber(fnprefix, fnsuffix)
 
 # capture standard out to logfile
-transcript.start(logfn)
+Transcript_start(logfn)
 
 # Inputs
-pArea_settings, bAUC_settings, costs, pcosts = ba.getInputsFromUser()
+pArea_settings, bAUC_settings, costs, pcosts = getInputsFromUser()
 print(f'\npArea_settings: {pArea_settings}')
 print(f'bAUC_settings: {bAUC_settings}')
 print(f'costs: {costs}')
@@ -147,18 +151,18 @@ def truncate(n, decimals=0):
     return int(n * multiplier) / multiplier
 #enddef
 
-# modified slightly:
 def plot_bayesian_iso_line(neg, pos, costs):
-    #plot iso_line that pass through the bayesian point
+    # plot iso_line that passes through the bayesian point
+    from Helpers.bayesianAUC import bayesian_iso_lines
+
     prev       = pos/(neg+pos)     # prevalence
     prior_point= (prev,prev)
-    bayes_iso_line_y, bayes_iso_line_x = ba.bayesian_iso_lines(prior_point, neg, pos, costs)
+    bayes_iso_line_y, bayes_iso_line_x = bayesian_iso_lines(prior_point, neg, pos, costs)
     x          = np.linspace(0, 1, 1000)
     plt.plot(x, bayes_iso_line_y(x), linestyle=':', color = 'green')
     plt.plot([prev], [prev], 'ro')
 #enddef
 
-# modified slightly:
 def plot_roc(title, fpr, tpr, roc_auc, optimal_score_pt, neg, pos, costs):
     plt.figure()
     linewidth = 2
@@ -207,12 +211,11 @@ def getRange(matchRng, approxRng):
     return [a, b]
 #enddef
 
-# modified a little:
 def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     from Helpers.pointMeasures import optimal_ROC_point_indices
-    from Helpers.splitData import getTrainAndValidationFoldData
-    #from DeepROC import DeepROC
-    from BayesianROC import BayesianROC
+    from Helpers.pointMeasures import classification_point_measures
+    from Helpers.splitData     import getTrainAndValidationFoldData
+    from BayesianROC           import BayesianROC
 
     # ret = None
     # try:
@@ -271,7 +274,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
 
             # get the measure from the confuion matrix
             prevalence      = pos / (pos + neg)
-            measure         = pm.classification_point_measures(conf, prevalence=prevalence, costs=newcosts)
+            measure         = classification_point_measures(conf, prevalence=prevalence, costs=newcosts)
             acc             = measure['Acc']
             accs.append(acc)
             acc_indices.append(optimal_indices[0])
@@ -458,9 +461,9 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
                             xFixedCosts
             print(f'Acc {xAcc:0.2f}, cwAcc {xcwAcc:0.2f}, fixedCosts {xFixedCosts:0.2f}')
 
-        transcript.stop()
+        Transcript_stop()
         plt.show()
-        transcript.start(logfn)
+        Transcript_start(logfn)
         ret = name, CV_acc, meanAUC, pAUC, AUCi, AUCi_d, AUCi_b, test_Acc, testAUC
     #endif
 
@@ -515,4 +518,4 @@ result_tuple, result_df = run_many_classifiers(X_train, X_test, y_train, y_test,
 # print(result_tuple)
 result_df.style.format('{:.3f}')
 print(result_df)
-transcript.stop()
+Transcript_stop()

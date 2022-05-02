@@ -2,7 +2,7 @@
 # BayesianROC.py
 # by André Carrington and Franz Mayr
 
-from DeepROC import DeepROC
+from deeproc.DeepROC import DeepROC
 
 class BayesianROC(DeepROC):
 
@@ -42,6 +42,7 @@ class BayesianROC(DeepROC):
 
     def analyzeGroupVs(self, groupIndex, prevalence, costs, prior, forFolds):
         from Helpers.BayesianROCFunctions import BayesianAUC
+
         returnValues     = self.getGroupForAUCi(groupIndex, forFolds)
         groupByOtherAxis = returnValues[2]
         if self.groupAxis == 'FPR':
