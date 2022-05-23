@@ -1,5 +1,7 @@
 # Bayesian ROC Toolkit (including Binary Chance)
   
+Written by Franz Mayr and André Carrington  
+  
 Please read 'Bayesian ROC Tookit Documentation.docx' for details.  
   
 BayesianROC is a subclass of DeepROC (from the Deep ROC Toolkit).  It computes measures related to the Chance and Bayesian iso performance baselines and produces associated plots.  
