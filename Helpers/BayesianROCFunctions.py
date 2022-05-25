@@ -56,6 +56,8 @@ def CarringtonCost(prevalence, costs):
     #endif
 #enddef
 
+# def ROC_meets_bayesian_iso_line(fpr, tpr, slopeOrSkew)
+
 def bayesian_iso_lines(prevalence, costs, prior):
     # iso performance line that passes through a point representing a Bayesian prior (e.g., prevalence)
     x_prior = prior[0]

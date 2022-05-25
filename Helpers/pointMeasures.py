@@ -8,6 +8,8 @@
 
 def classification_point_measures(conf, prevalence, costs):
     import numpy as np
+    import warnings
+
     TN, FP, FN, TP     = conf.ravel()
     cTN, cFP, cFN, cTP = costs['cTN'], costs['cFP'], costs['cFN'], costs['cTP']
     neg_prevalence     = 1 - prevalence
@@ -16,6 +18,7 @@ def classification_point_measures(conf, prevalence, costs):
     stat['Spec'] = TN/(TN+FP)                          # Specificity, True Negative Rate, Selectivity
     stat['Rec']  = stat['Sens']
 
+    warnings.filterwarnings('ignore')
     stat['PPV']  = TP/(TP+FP)                          # Positive Predictive Value, Precision
     stat['NPV']  = TN/(TN+FN)                          # Negative Predictive Value, Inverse Precision
     stat['Prec'] = stat['PPV']

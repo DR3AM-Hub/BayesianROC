@@ -81,6 +81,42 @@ class BayesianROC(DeepROC):
         return measures_dict
     #enddef
 
+    # modified slightly:
+    def plotBayesianIsoLine(self, priorPoint, neg, pos, costs):
+        from   Helpers.BayesianROCFunctions  import bayesian_iso_lines
+        import numpy               as     np
+        import matplotlib.pyplot   as     plt
+
+        # plot iso_line that passes through the (bayesian) prior point
+        bayes_iso_line_y, bayes_iso_line_x = bayesian_iso_lines(pos/(pos+neg), costs, priorPoint)
+        x = np.linspace(0, 1, 1000)
+        plt.plot(x, bayes_iso_line_y(x), linestyle='-', color='black')
+        plt.plot([priorPoint[0]], [priorPoint[1]], 'ro')
+    # enddef
+
+    def plotGroup(self, plotTitle, groupIndex, showError=False, showThresholds=True, showOptimalROCpoints=True,
+                  costs=None, saveFileName=None, numShowThresh=20, showPlot=True, labelThresh=True,
+                  full_fpr_tpr=True):
+        fig, ax = super().plotGroup(plotTitle, groupIndex, showError, showThresholds, showOptimalROCpoints,
+                                    costs, saveFileName, numShowThresh, showPlot, labelThresh, full_fpr_tpr)
+        pos = 1 / (self.NPclassRatio + 1)
+        neg = 1 - pos
+        self.plotBayesianIsoLine(self.priorPoint, neg, pos, costs)
+        return fig, ax
+    #enddef
+
+    def plotGroupForFolds(self, plotTitle, groupIndex, foldsNPclassRatio, showError=False, showThresholds=True,
+                          showOptimalROCpoints=True, costs=None, saveFileName=None, numShowThresh=20,
+                          showPlot=True, labelThresh=True, full_fpr_tpr=True):
+        fig, ax = super().plotGroupForFolds(plotTitle, groupIndex, foldsNPclassRatio, showError,
+                                            showThresholds, showOptimalROCpoints, costs, saveFileName,
+                                            numShowThresh, showPlot, labelThresh, full_fpr_tpr)
+        pos = 1/(foldsNPclassRatio + 1)
+        neg = 1 - pos
+        self.plotBayesianIsoLine(self.priorPoint, neg, pos, costs)
+        return fig, ax
+    #enddef
+
     def __str__(self):
         '''This method prints the object as a string of its content re 
            predicted scores, labels, full fpr, full tpr, full thresholds.'''
