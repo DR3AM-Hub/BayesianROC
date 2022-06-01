@@ -3,6 +3,9 @@
 # by André Carrington and Franz Mayr
 
 from deeproc.DeepROC import DeepROC
+#import sys
+#sys.path.append('/Users/andrecarrington/deepROC')
+#from DeepROC import DeepROC
 
 class BayesianROC(DeepROC):
 
@@ -38,6 +41,16 @@ class BayesianROC(DeepROC):
     def analyzeGroupVsPrior(self, groupIndex, prevalence, costs, prior):
         forFolds = False
         return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
+    #enddef
+
+    def getMeanROC_A_pi(self, prevalence, costs, prior):
+        from Helpers.BayesianROCFunctions import getA_pi
+        return getA_pi(self.mean_fpr, self.mean_tpr, prevalence, costs, prior)
+    #enddef
+
+    def getA_pi(self, prevalence, costs, prior):
+        from Helpers.BayesianROCFunctions import getA_pi
+        return getA_pi(self.full_fpr, self.full_tpr, prevalence, costs, prior)
     #enddef
 
     def analyzeGroupVs(self, groupIndex, prevalence, costs, prior, forFolds):
@@ -91,7 +104,7 @@ class BayesianROC(DeepROC):
         bayes_iso_line_y, bayes_iso_line_x = bayesian_iso_lines(pos/(pos+neg), costs, priorPoint)
         x = np.linspace(0, 1, 1000)
         plt.plot(x, bayes_iso_line_y(x), linestyle='-', color='black')
-        plt.plot([priorPoint[0]], [priorPoint[1]], 'ro')
+        plt.plot([priorPoint[0]], [priorPoint[1]], 'ko')
     # enddef
 
     def plotGroup(self, plotTitle, groupIndex, showError=False, showThresholds=True, showOptimalROCpoints=True,

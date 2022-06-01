@@ -12,10 +12,10 @@ import sys
 def getInputsFromUser():
 
     # the preface and input prompts _p (one is a function _f)
-    preface       = 'This notebook computes AUC and C measures for the whole ROC curve\n'+ \
-                    'or part of an ROC curve.  It computes variations of AUC and C for\n'+ \
-                    'more optimal, equitable and personalized decision-making.\n'
-                    
+    preface       = 'This program computes measures related to AUC and C for parts of an ROC curve.\n'
+    #                'or part of an ROC curve.  It computes variations of AUC and C for\n'+ \
+    #                'more optimal, equitable and personalized decision-making.\n'
+
     # C_p           = 'Compute C measures (equal to AUC)? [y]/n'
     #
     # pArea_p       = 'Compute partial area/AUC measures? y/[n]'
@@ -26,13 +26,13 @@ def getInputsFromUser():
 
     bAUC_p        = 'Compute Bayesian AUC? [y]/n'
     
-    preface2      = '\nThe Bayesian AUC uses a prior, the prevalence and costs.\n'+ \
-                    'Costs automatically include prevalence, regardless of the prior.\n'+ \
-                    'It compares performance against the prior, a point in ROC that represents either:\n'+ \
-                    '    binary chance, i.e. (0.5,0.5) or\n'+ \
-                    '    the prevalence of data, i.e. (π,π) or\n'+ \
-                    '    a person\'s performance, or\n'+ \
-                    '    the performance of another classifier.\n'
+    preface2      = '\nThe Bayesian AUC uses a prior, the prevalence and costs.\n'
+    #               'Costs automatically include prevalence, regardless of the prior.\n'+ \
+    #               'It compares performance against the prior, a point in ROC that represents either:\n'+ \
+    #               '    binary chance, i.e. (0.5,0.5) or\n'+ \
+    #               '    the prevalence of data, i.e. (π,π) or\n'+ \
+    #               '    a person\'s performance, or\n'+ \
+    #               '    the performance of another classifier.\n'
     
     which_prev_p  = 'Use the sample prevalence? [y]/n'
     pop_prev_p    = 'What is the known/population prevalence?'
@@ -103,32 +103,35 @@ def getInputsFromUser():
     #     pcosts      = None
     # else:
     if True:
-        print(preface2)
-        sample_prev = rip.getYes(which_prev_p, default='y')
-        if sample_prev == 'n':
-            prev    = rip.getFraction(pop_prev_p)
-        else:
-            prev    = 0  # set this later
-        #endif
-        
-        prev_prior  = rip.getYes(prev_prior_p, default='y')
-        if prev_prior == 'n':
-            prior   = rip.getROCpoint(prior_p)
-        else:
-            prior   = 0  # set this later
-        #endif
-
-        print(preface3)        
-        do_costs          = rip.getYes(cost_p, default='y')
-        if do_costs       == 'y':
-            cost_mode     = rip.getYes(cost_mode_p, yes='individuals', no='rates', default='individuals')
-            costs         = rip.getROCcosts(cost_prefix,cost_mode)            
-            costs['mode'] = cost_mode   # add cost_mode into costs dictionary
-        else:
-            cost_mode     = 'individuals'
-            costs         = {'FP' :1, 'FN' :1, 'TP' :0, 'TN' :0, 'mode':'individuals'}
-        #endif
-        print('')
+    #     print(preface2)
+    #     sample_prev = rip.getYes(which_prev_p, default='y')
+    #     if sample_prev == 'n':
+    #         prev    = rip.getFraction(pop_prev_p)
+    #     else:
+    #         prev    = 0  # set this later
+    #    #endif
+    #
+    #     prev_prior  = rip.getYes(prev_prior_p, default='y')
+    #     if prev_prior == 'n':
+    #         prior   = rip.getROCpoint(prior_p)
+    #     else:
+    #         prior   = 0  # set this later
+    #     #endif
+    #
+    #    print(preface3)
+    #     do_costs          = rip.getYes(cost_p, default='y')
+    #     if do_costs       == 'y':
+    #         cost_mode     = rip.getYes(cost_mode_p, yes='individuals', no='rates', default='individuals')
+        cost_mode     = 'individuals'
+        costs         = rip.getROCcosts(cost_prefix, cost_mode)
+        costs['mode'] = cost_mode   # add cost_mode into costs dictionary
+    #         costs         = rip.getROCcosts(cost_prefix,cost_mode)
+    #         costs['mode'] = cost_mode   # add cost_mode into costs dictionary
+    #     else:
+    #         cost_mode     = 'individuals'
+    #         costs         = {'FP' :1, 'FN' :1, 'TP' :0, 'TN' :0, 'mode':'individuals'}
+    #     #endif
+    #     print('')
         
         # do_personalB      = rip.getYes(personalB_p,default='n')
         # if do_personalB   =='y':
@@ -172,8 +175,7 @@ def PeirceMetzCost(neg, pos, cost):
 #enddef
 
 def CarringtonCost(neg, pos, cost):
-    # costs for rates is an alternative paradigm which reveals a squared effect 
-    # Carrington 2020
+    # to be revised
     cost_P    =   cost['FNR']  - cost['TPR']
     cost_N    =   cost['FPR']  - cost['TNR']
     m         = ((neg/pos)**2) * (cost_N/cost_P)

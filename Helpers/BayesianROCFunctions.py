@@ -56,8 +56,6 @@ def CarringtonCost(prevalence, costs):
     #endif
 #enddef
 
-# def ROC_meets_bayesian_iso_line(fpr, tpr, slopeOrSkew)
-
 def bayesian_iso_lines(prevalence, costs, prior):
     # iso performance line that passes through a point representing a Bayesian prior (e.g., prevalence)
     x_prior = prior[0]
@@ -152,7 +150,27 @@ def ChanceAUC(fpr, tpr, group, prevalence, costs):
     return BayesianAUC(fpr, tpr, group, prevalence, costs, prior)
 #enddef
 
-# modified slightly:
+def getA_pi(fpr, tpr, prevalence, costs, prior):
+    #from scipy.optimize import root as findRoot
+    from scipy.optimize import brentq
+
+    approximate_y    = interp1d(fpr, tpr)  # x,y; to estimate y=f(x)
+    b_iso_line_y, _1 = bayesian_iso_lines(prevalence, costs, prior)
+
+    def roc_over_bayesian_iso_line(x):
+        # this function is NOT vectorized
+        #print(x)
+        res = approximate_y(x) - b_iso_line_y(x)
+        return res
+    #enddef
+
+    #A_pi_x     = findRoot(lambda x: roc_over_bayesian_iso_line(x), 0.2, method='broyden1').x
+    A_pi_x      = brentq(lambda x: roc_over_bayesian_iso_line(x), 0, 1)
+    A_pi_y      = approximate_y(A_pi_x)
+    roc_minus_b = roc_over_bayesian_iso_line(A_pi_x)
+    return (A_pi_x, A_pi_y), roc_minus_b
+#enddef
+
 def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
     approximate_y = interp1d(fpr, tpr)  # x,y; to estimate y=f(x)
     approximate_x = interp1d(tpr, fpr)  # y,x; to estimate x=f_inverse(y)
@@ -250,8 +268,12 @@ def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
     pdely        = dely - pi_x   # dely*1 is a horizontal area, minus pi_x, a baseline horizontal area
     ddelx        = delx - d_y    # delx*1 is a vertical   area, minus d_y,  a baseline vertical   area
     ddely        = dely - d_x    # dely*1 is a horizontal area, minus d_x,  a baseline horizontal area
-    AUCni_pi     = (pdelx / (pdelx + pdely)) * pAUC_pi/pdelx + (pdely / (pdelx + pdely)) * pAUCx_pi/pdely
-    AUCni_d      = (ddelx / (ddelx + ddely)) * pAUC_d/ddelx  + (ddely / (ddelx + ddely)) * pAUCx_d/ddely
+    try:
+        AUCni_pi     = (pdelx / (pdelx + pdely)) * pAUC_pi/pdelx + (pdely / (pdelx + pdely)) * pAUCx_pi/pdely
+        AUCni_d      = (ddelx / (ddelx + ddely)) * pAUC_d/ddelx  + (ddely / (ddelx + ddely)) * pAUCx_d/ddely
+    except:
+        print('')
+    #endtry
     # AUCni_pi     = (delx / (delx + dely)) * pAUC_pi + (dely / (delx + dely)) * pAUCx_pi
     # AUCni_d      = (delx / (delx + dely)) * pAUC_d  + (dely / (delx + dely)) * pAUCx_d
 

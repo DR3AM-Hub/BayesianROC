@@ -50,8 +50,8 @@ print(f'\npArea_settings: {pArea_settings}')
 print(f'bAUC_settings: {bAUC_settings}')
 print(f'costs: {costs}')
 dropSizeTexture = False
-dropSize        = False
-dropShape       = False
+dropSize        = True
+dropShape       = True
 
 # Load Wisconsin Breast Cancer data and do some data wrangling
 data = pd.read_csv("data.csv")
@@ -149,49 +149,6 @@ def truncate(n, decimals=0):
     multiplier = 10 ** decimals
     return int(n * multiplier) / multiplier
 #enddef
-
-# def plot_bayesian_iso_line(neg, pos, costs):
-#     # plot iso_line that passes through the bayesian point
-#     from Helpers.bayesianAUC import bayesian_iso_lines
-#
-#     prev       = pos/(neg+pos)     # prevalence
-#     prior_point= (prev,prev)
-#     bayes_iso_line_y, bayes_iso_line_x = bayesian_iso_lines(prior_point, neg, pos, costs)
-#     x          = np.linspace(0, 1, 1000)
-#     plt.plot(x, bayes_iso_line_y(x), linestyle=':', color = 'green')
-#     plt.plot([prev], [prev], 'ro')
-#     return bayes_iso_line_y, bayes_iso_line_x
-# #enddef
-
-# def plot_roc(title, fpr, tpr, roc_auc, optimal_score_pt, neg, pos, costs):
-#     plt.figure()
-#     linewidth = 2
-#     #plt.plot([0, 1], [1, 1], color='grey', alpha=0.2, lw=linewidth, linestyle='-')
-#     plt.plot(fpr, tpr, color='darkorange',
-#              lw=linewidth, label='ROC curve (area = %0.2f)' % roc_auc)
-#     plt.plot([0, 1], [0, 1], color='navy', lw=linewidth, linestyle='--')
-#     plt.xlim([-0.01, 1.0])
-#     #plt.ylim([0.0, 1.05])
-#     plt.ylim([0.0, 1.01])
-#     plt.xlabel('False Positive Rate')
-#     plt.ylabel('True Positive Rate')
-#     plt.title(title)
-#     plt.legend(loc="lower right")
-#     plt.plot([optimal_score_pt[0]], [optimal_score_pt[1]], 'go')
-#
-#     approximation = interp1d(fpr, tpr)
-#     # suppress the annoying IntegrationWarning
-#     import warnings
-#     warnings.filterwarnings('ignore')
-#     # warnings.simplefilter(action='ignore', category=IntegrationWarning) # this doesn't work
-#
-#     x             = np.linspace(0, 1, 1000)
-#     plt.plot(x, approximation(x), linestyle='solid')
-#
-#     plot_bayesian_iso_line(neg, pos, costs)
-#
-#     plt.show()
-# #enddef
 
 def getRange(matchRng, approxRng):
     if matchRng[0] == 'NA':
@@ -320,8 +277,6 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     ptpr          = np.array(ptpr)
     plt.scatter(pfpr[optIndicesROI], ptpr[optIndicesROI], s=40, marker='o', alpha=1, facecolors='w', lw=2,
                 edgecolors='b')
-    plotFileName = f'MeanROC_CV_Group{groupIndex_0_015}_{name}_{testNum}'
-    fig1.savefig(f'{output_dir}/{plotFileName}.png')
 
     # Describe absolute and relative performance:
     prevalence = pos / (pos + neg)
@@ -335,6 +290,24 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     AUCi        = groupMeasures['AUC_i']
     AUCi_d      = groupMeasures['AUCi_d']
     AUCi_b      = groupMeasures['AUCi_pi']
+    A_pi, \
+    roc_minus_b = ROC.getMeanROC_A_pi(prevalence, newcosts, binaryChance)
+
+    plt.scatter([A_pi[0]], [A_pi[1]], s=40, marker='o', alpha=1, facecolors='w', lw= 2, edgecolors='k')
+    plotFileName = f'MeanROC_CV_Group{groupIndex_0_015}_{name}_{testNum}'
+    fig1.savefig(f'{output_dir}/{plotFileName}.png')
+
+    fixedCosts = lambda prev, cFN, cTN: prev     * cFN + \
+                                             (1-prev) * cTN
+
+    cwAcc      = lambda prev, cFN, cTP, cFP, cTN, A_pi: prev     * (cFN - cTP) * A_pi[1] - \
+                                                        (1-prev) * (cFP - cTN) * A_pi[0] - \
+                                                        fixedCosts(prevalence, cFN, cTN)
+
+    A_pi_cwAcc = cwAcc(prevalence, newcosts['cFN'], newcosts['cTP'],
+                                   newcosts['cFP'], newcosts['cTN'], A_pi)
+
+    print(f'\n   A_pi is ({A_pi[0]:0.2f},{A_pi[1]:0.2f}) with weighted cost {A_pi_cwAcc:0.2f} at zero {roc_minus_b:0.4f}')
 
     print(f'\n   Mean AUC is {meanAUC:0.3f} with confidence interval ({AUClow:0.3f}, {AUChigh:0.3f})')
     #     All: AUC_d vs.AUC_Omega of Mean ROC
@@ -397,10 +370,13 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     plt.scatter(fpr[optIndicesROC], tpr[optIndicesROC], s=40, marker='o', alpha=1, facecolors='w', lw=2,
                 edgecolors='r')
 
+    A_pi, roc_minus_b = ROCtest.getA_pi(prevalence, newcosts, binaryChance)
+    plt.scatter([A_pi[0]], [A_pi[1]], s=40, marker='o', alpha=1, facecolors='w', lw=2, edgecolors='k')
+
     pfpr, ptpr, _3, _4, matchRng, approxRng = ROCtest.getGroupForAUC(fpr, tpr, thresholds, groupAxis,
                                                                      groups[groupIndex_0_015],
                                                                      rocRuleLeft, rocRuleRight, quiet)
-    rng = getRange(matchRng, approxRng)
+    rng     = getRange(matchRng, approxRng)
     pthresh = thresholds[rng[0]:rng[1]+1]
 
     optIndicesROI = optimal_ROC_point_indices(pfpr, ptpr, slopeOrSkew)
@@ -424,8 +400,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
                            [(fpr[optIndicesROC[0]], tpr[optIndicesROC[0]]), (fpr[optIndicesROI[0]], tpr[optIndicesROI[0]]),
                                 (0, 0), (1, 1)]):
 
-        xAcc, xcwAcc, xFixedCosts, conf = compute_Acc_CostWeightedAcc(t, prevalence, newcosts,
-                                                                      pred_proba, y_test)
+        xAcc, xcwAcc, xFixedCosts, conf = compute_Acc_CostWeightedAcc(t, prevalence, newcosts, pred_proba, y_test)
         if namep == 'first optimal ROC curve':
             test_Acc = xAcc  # save this value for the function to return later
 
@@ -437,8 +412,8 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         print(conf)
         print(f'   Accuracy {xAcc:0.2f}, Cost Weighted Accuracy {xcwAcc:0.2f}, Fixed Costs {xFixedCosts:0.2f}')
 
-    for namep, p in zip(['chance', 'perfect'], [(0.5, 0.5), (0, 1)]):
-        print(f"\n   For the {namep} ROC point at ({p[0]:0.2f}, {p[1]:0.2f}):")
+    for namep, p, circ in zip(['chance', 'perfect'], [(0.5, 0.5), (0, 1)], [', solid black circle', '']):
+        print(f"\n   For the {namep} ROC point at ({p[0]:0.2f}, {p[1]:0.2f}){circ}:")
         xAcc          = prevalence       * p[1] + \
                         (1 - prevalence) * p[0]
         xFixedCosts   = prevalence       *  newcosts['cFN']  + \
