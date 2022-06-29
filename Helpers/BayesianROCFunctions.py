@@ -12,15 +12,6 @@
 #   CarringtonCost
 #   bayesian_auc
 
-
-# tasks to do:
-#   - how do doctors make personalized decisions?
-#   - how do doctors use costs in the literature?
-#   - design a study of doctors and decision-making on this matter
-#       - how can I get doctors to participate?
-#       - who (which agencies, conditions, doctors, investigators) care about this question?
-#   - what are the costs for breast cancer remission per Wisconsin data?
-#   - what are examples of costs in general?
 import warnings
 
 from   scipy.interpolate     import interp1d
