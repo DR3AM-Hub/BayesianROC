@@ -50,7 +50,7 @@ print(f'\npArea_settings: {pArea_settings}')
 print(f'bAUC_settings: {bAUC_settings}')
 print(f'costs: {costs}')
 dropSizeTexture = False
-dropSize        = True
+dropSize        = False
 dropShape       = True
 
 # Load Wisconsin Breast Cancer data and do some data wrangling
@@ -293,21 +293,27 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     A_pi, \
     roc_minus_b = ROC.getMeanROC_A_pi(prevalence, newcosts, binaryChance)
 
-    plt.scatter([A_pi[0]], [A_pi[1]], s=40, marker='o', alpha=1, facecolors='w', lw= 2, edgecolors='k')
+    if A_pi[0] is not None:
+        plt.scatter([A_pi[0]], [A_pi[1]], s=40, marker='o', alpha=1, facecolors='w', lw= 2, edgecolors='k')
+    #endif
     plotFileName = f'MeanROC_CV_Group{groupIndex_0_015}_{name}_{testNum}'
     fig1.savefig(f'{output_dir}/{plotFileName}.png')
 
     fixedCosts = lambda prev, cFN, cTN: prev     * cFN + \
-                                             (1-prev) * cTN
+                                        (1-prev) * cTN
 
     cwAcc      = lambda prev, cFN, cTP, cFP, cTN, A_pi: prev     * (cFN - cTP) * A_pi[1] - \
                                                         (1-prev) * (cFP - cTN) * A_pi[0] - \
                                                         fixedCosts(prevalence, cFN, cTN)
 
-    A_pi_cwAcc = cwAcc(prevalence, newcosts['cFN'], newcosts['cTP'],
-                                   newcosts['cFP'], newcosts['cTN'], A_pi)
-
-    print(f'\n   A_pi is ({A_pi[0]:0.2f},{A_pi[1]:0.2f}) with weighted cost {A_pi_cwAcc:0.2f} at zero {roc_minus_b:0.4f}')
+    if A_pi[0] is not None:
+        A_pi_cwAcc = cwAcc(prevalence, newcosts['cFN'], newcosts['cTP'],
+                                       newcosts['cFP'], newcosts['cTN'], A_pi)
+        print(f'\n   A_pi is ({A_pi[0]:0.2f},{A_pi[1]:0.2f}) ' +
+              f'with weighted cost {A_pi_cwAcc:0.2f} at zero {roc_minus_b:0.4f}')
+    else:
+        print(f'\n   A_pi not shown.')
+    #endif
 
     print(f'\n   Mean AUC is {meanAUC:0.3f} with confidence interval ({AUClow:0.3f}, {AUChigh:0.3f})')
     #     All: AUC_d vs.AUC_Omega of Mean ROC
@@ -371,7 +377,9 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
                 edgecolors='r')
 
     A_pi, roc_minus_b = ROCtest.getA_pi(prevalence, newcosts, binaryChance)
-    plt.scatter([A_pi[0]], [A_pi[1]], s=40, marker='o', alpha=1, facecolors='w', lw=2, edgecolors='k')
+    if A_pi[0] is not None:
+        plt.scatter([A_pi[0]], [A_pi[1]], s=40, marker='o', alpha=1, facecolors='w', lw=2, edgecolors='k')
+    #endif
 
     pfpr, ptpr, _3, _4, matchRng, approxRng = ROCtest.getGroupForAUC(fpr, tpr, thresholds, groupAxis,
                                                                      groups[groupIndex_0_015],
@@ -412,10 +420,11 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         print(conf)
         print(f'   Accuracy {xAcc:0.2f}, Cost Weighted Accuracy {xcwAcc:0.2f}, Fixed Costs {xFixedCosts:0.2f}')
 
-    for namep, p, circ in zip(['chance', 'perfect'], [(0.5, 0.5), (0, 1)], [', solid black circle', '']):
+    for namep, p, circ in zip(['chance', 'perfect', 'worst'], [(0.5, 0.5), (0, 1), (1, 0)],
+                              [', solid black circle', '', '']):
         print(f"\n   For the {namep} ROC point at ({p[0]:0.2f}, {p[1]:0.2f}){circ}:")
-        xAcc          = prevalence       * p[1] + \
-                        (1 - prevalence) * p[0]
+        xAcc          = prevalence       * p[1]     + \
+                        (1 - prevalence) * (1-p[0])
         xFixedCosts   = prevalence       *  newcosts['cFN']  + \
                         (1 - prevalence) *  newcosts['cTN']
         xcwAcc        = prevalence       * (newcosts['cFN'] - newcosts['cTP']) * p[1] - \
