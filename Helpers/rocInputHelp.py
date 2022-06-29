@@ -13,6 +13,15 @@
 import numpy             as np
 import sys
 
+def getYesAsTrue(prompt,yes='y',no='n',default='y'):
+    response = getYes(prompt, yes=yes, no=no, default=default)
+    if response == 'y':
+        return True
+    else:
+        return False
+    #endif
+#enddef
+
 def getYes(prompt,yes='y',no='n',default='y'):
     #print('*'+prompt+'   '+'*')
     response     = input(prompt+'  ')

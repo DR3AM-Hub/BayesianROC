@@ -150,28 +150,123 @@ def ChanceAUC(fpr, tpr, group, prevalence, costs):
     return BayesianAUC(fpr, tpr, group, prevalence, costs, prior)
 #enddef
 
+def alterForRoot(fpr, tpr):
+    import numpy as np
+
+    fpr = list(fpr)
+    tpr = list(tpr)
+    n = len(fpr)
+    for i in range(n-1, -1, -1):
+        if tpr[i] == 1:
+            continue
+        else:
+            removeIndex = i+1
+            break
+        #endif
+    #endfor
+    if removeIndex < n-1:
+        fpr[removeIndex:n-1]=[]  # remove repeated values of [x,1] and just leave the last
+        tpr[removeIndex:n-1]=[]  # remove repeated values of [x,1] and just leave the last
+    #endif
+    n = len(fpr)
+    for i in range(0, n):
+        if fpr[i] == 0:
+            continue
+        else:
+            removeIndex = i-1
+            break
+        #endif
+    #endfor
+    if removeIndex > 0:
+        fpr[1:removeIndex+1] = []  # remove repeated values of [x,1] and just leave the last
+        tpr[1:removeIndex+1] = []  # remove repeated values of [x,1] and just leave the last
+    # endif
+    fpr = np.array(fpr)
+    tpr = np.array(tpr)
+    return fpr, tpr
+#enddef
+
 def getA_pi(fpr, tpr, prevalence, costs, prior):
     #from scipy.optimize import root as findRoot
     from scipy.optimize import brentq
 
-    approximate_y    = interp1d(fpr, tpr)  # x,y; to estimate y=f(x)
-    b_iso_line_y, _1 = bayesian_iso_lines(prevalence, costs, prior)
+    # find the intersection A_pi as the zeros or roots of the equation for
+    # the ROC curve (approximate_y, or approximate_x) minus the bayesian_iso_line (b_iso_line_y, or b_iso_line_x)
+    # where minus is vertical or horizontal respectively.
+
+    # repeated (0,y) at the beginning of an ROC curve, and repeated (x,1) at the end
+    # causes the ROC curve not to be a proper vertical function nor proper horizontal function, respectively
+    # and this means that interp1d cannot help us with values or intersections in those two ranges
+    # which are not proper functions. Hence, we use a close approximation that is a proper function:
+    # we eliminate the repeated points that make it improper, and this is close enough, unless the data
+    # are very coarse/sparse.
+    fprForRoot, tprForRoot     = alterForRoot(fpr, tpr)
+
+    approximate_y              = interp1d(fprForRoot, tprForRoot)  # x,y; to estimate y=f(x)
+    approximate_x              = interp1d(tprForRoot, fprForRoot)  # y,x; to estimate x=f_inverse(y)
+    b_iso_line_y, b_iso_line_x = bayesian_iso_lines(prevalence, costs, prior)
 
     def roc_over_bayesian_iso_line(x):
         # this function is NOT vectorized
-        #print(x)
-        res = approximate_y(x) - b_iso_line_y(x)
-        return res
+        function_of_x = approximate_y(x) - b_iso_line_y(x)
+        return function_of_x
     #enddef
 
-    #A_pi_x     = findRoot(lambda x: roc_over_bayesian_iso_line(x), 0.2, method='broyden1').x
-    A_pi_x      = brentq(lambda x: roc_over_bayesian_iso_line(x), 0, 1)
-    A_pi_y      = approximate_y(A_pi_x)
-    roc_minus_b = roc_over_bayesian_iso_line(A_pi_x)
-    return (A_pi_x, A_pi_y), roc_minus_b
+    def roc_left_of_bayesian_iso_line(y):
+        # this function is NOT vectorized
+        # use (1 - ...) in both terms to flip FPR into TNR
+        function_of_y = (1 - approximate_x(y)) - (1 - b_iso_line_x(y))
+        return function_of_y
+    # enddef
+
+    (A_pi_x, A_pi_y), rootVal = findRoot(roc_over_bayesian_iso_line, approximate_y)
+    if rootVal is None:
+        (A_pi_x, A_pi_y), rootVal = findRoot(roc_left_of_bayesian_iso_line, approximate_x, isVertical=False)
+    #endif
+    return (A_pi_x, A_pi_y), rootVal
 #enddef
 
+def findRoot(roc_minus_b, approx, isVertical=True):
+    from scipy.optimize import brentq
+    # A_pi_x     = findRoot(lambda x: roc_over_bayesian_iso_line(x), 0.2, method='broyden1').x
+    if isVertical:
+        type='vertical'
+    else:
+        type='horizontal'
+    print(f'\nSeeking {type} root on interval [0, 1] with range [{roc_minus_b(0):0.2f}, {roc_minus_b(1):0.2f}]')
+    try:
+        A_pi_val, r = brentq(lambda z: roc_minus_b(z), 0, 1, full_output=True, disp=False)
+        rootFound = r.converged
+        if not rootFound:
+            print('    Root finding for intersection did not converge')
+    except ValueError as e:
+        rootFound = False
+        print(f'    Root finding for intersection encountered a ValueError:\n    {e}')
+    # endtry
+    if rootFound:
+        if isVertical:
+            A_pi_x = A_pi_val
+            A_pi_y = float(approx(A_pi_x))
+            rootVal = roc_minus_b(A_pi_x)
+            print(f'returning vertical root value {rootVal:0.2g} at ({A_pi_x:0.2f},{A_pi_y:0.2f})')
+            return (A_pi_x, A_pi_y), rootVal
+        else:
+            A_pi_y = A_pi_val
+            A_pi_x = float(approx(A_pi_y))
+            rootVal = roc_minus_b(A_pi_y)
+            print(f'returning horizontal root value {rootVal:0.2g} at ({A_pi_x:0.2f},{A_pi_y:0.2f})')
+            return (A_pi_x, A_pi_y), rootVal
+        # endif
+    else:
+        print(f'returning no root value')
+        return (None, None), None
+    # endif
+# enddef
+
 def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
+    # this function computes measures over the group/region specified in fpr and tpr
+    # that is, the measures are group measures, unless the input fpr and tpr represent the whole
+
     approximate_y = interp1d(fpr, tpr)  # x,y; to estimate y=f(x)
     approximate_x = interp1d(tpr, fpr)  # y,x; to estimate x=f_inverse(y)
 
@@ -231,6 +326,7 @@ def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
 
     warnings.filterwarnings('ignore')  # avoid an annoying integration warning.
 
+    # print(f"group: {group['x1']:0.3f}, {group['x2']:0.3f}")
     pAUC_pi_pos  = integrate.quad(lambda x: roc_over_bayesian_iso_line_positive(x), group['x1'], group['x2'])[0]
     pAUC_pi_neg  = integrate.quad(lambda x: roc_over_bayesian_iso_line_negative(x), group['x1'], group['x2'])[0]
     pi_y         = integrate.quad(lambda x: b_iso_line_y(x), group['x1'], group['x2'])[0]
@@ -264,34 +360,62 @@ def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
 
     delx         = group['x2'] - group['x1']
     dely         = group['y2'] - group['y1']
-    pdelx        = delx - pi_y   # delx*1 is a vertical   area, minus pi_y, a baseline vertical   area
-    pdely        = dely - pi_x   # dely*1 is a horizontal area, minus pi_x, a baseline horizontal area
-    ddelx        = delx - d_y    # delx*1 is a vertical   area, minus d_y,  a baseline vertical   area
-    ddely        = dely - d_x    # dely*1 is a horizontal area, minus d_x,  a baseline horizontal area
+    # pdelx        = delx - pi_y   # delx*1 is a vertical   area, minus pi_y, a baseline vertical   area
+    # pdely        = dely - pi_x   # dely*1 is a horizontal area, minus pi_x, a baseline horizontal area
+    # ddelx        = delx - d_y    # delx*1 is a vertical   area, minus d_y,  a baseline vertical   area
+    # ddely        = dely - d_x    # dely*1 is a horizontal area, minus d_x,  a baseline horizontal area
     try:
-        AUCni_pi     = (pdelx / (pdelx + pdely)) * pAUC_pi/pdelx + (pdely / (pdelx + pdely)) * pAUCx_pi/pdely
-        AUCni_d      = (ddelx / (ddelx + ddely)) * pAUC_d/ddelx  + (ddely / (ddelx + ddely)) * pAUCx_d/ddely
-    except:
-        print('')
+        if   delx!=0 and dely!=0:      # normal case, general equation
+            AUCni_pi  = (delx / (delx + dely)) * pAUC_pi/delx + (dely / (delx + dely)) * pAUCx_pi/dely
+            pAUCn_pi  = pAUC_pi  / delx
+            pAUCxn_pi = pAUCx_pi / dely
+            AUCni_d   = (delx / (delx + dely)) * pAUC_d /delx + (dely / (delx + dely)) * pAUCx_d/dely
+            pAUCn_d   = pAUC_d   / delx
+            pAUCxn_d  = pAUCx_d  / dely
+        elif delx==0 and dely!=0:
+            AUCni_pi  = pAUCx_pi / dely  # equation reduced for special case
+            pAUCn_pi  = 0
+            pAUCxn_pi = pAUCx_pi / dely
+            AUCni_d   = pAUCx_d  / dely
+            pAUCn_d   = 0
+            pAUCxn_d  = pAUCx_d  / dely
+        elif delx!=0 and dely==0:
+            AUCni_pi  = pAUC_pi  / delx   # equation reduced for special case
+            pAUCn_pi  = pAUC_pi  / delx
+            pAUCxn_pi = 0
+            AUCni_d   = pAUC_d   / delx
+            pAUCn_d   = pAUC_d   / delx
+            pAUCxn_d  = 0
+        elif delx==0 and dely==0:
+            AUCni_pi  = 0
+            pAUCn_pi  = 0
+            pAUCxn_pi = 0
+        #endif
+    except RuntimeError as e:
+        print('RuntimeError computing AUCni_pi')
     #endtry
-    # AUCni_pi     = (delx / (delx + dely)) * pAUC_pi + (dely / (delx + dely)) * pAUCx_pi
-    # AUCni_d      = (delx / (delx + dely)) * pAUC_d  + (dely / (delx + dely)) * pAUCx_d
 
     measures_dict = dict(#AUC_pi=AUC_pi,        # an overall measure
-                         #AUC_pi_pos=AUC_pi_pos,     AUC_pi_neg=AUC_pi_neg,
-                         AUCi_pi=AUCi_pi,      # group measure, not normalized, should sum to the overall measure
-                         AUCni_pi=AUCni_pi,    # group measure, normalized
-                         pAUC_pi=pAUC_pi,           pAUCx_pi=pAUCx_pi,
+                         #AUC_pi_pos=AUC_pi_pos,    AUC_pi_neg=AUC_pi_neg,
+                         AUCi_pi    =AUCi_pi,       # group measure, not normalized, should sum to the overall measure
+                         AUCni_pi   =AUCni_pi,      # group measure, normalized
+                         pAUC_pi    =pAUC_pi,       pAUCx_pi    =pAUCx_pi,
+                         pAUCn_pi   =pAUCn_pi,      pAUCxn_pi   =pAUCxn_pi,
                          pAUC_pi_pos=pAUC_pi_pos,   pAUCx_pi_pos=pAUCx_pi_pos,
                          pAUC_pi_neg=pAUC_pi_neg,   pAUCx_pi_neg=pAUCx_pi_neg,
                          #AUC_d=AUC_d,         # an overall measure
                          #AUC_d_pos=AUC_d_pos,       AUC_d_neg=AUC_d_neg,
-                         AUCi_d=AUCi_d,         # group measure, not normalized, should sum to the overall measure
-                         AUCni_d=AUCni_d,       # group measure, normalized
-                         pAUC_d=pAUC_d,             pAUCx_d=pAUCx_d,
-                         pAUC_d_pos=pAUC_d_pos,     pAUCx_d_pos=pAUCx_d_pos,
-                         pAUC_d_neg=pAUC_d_neg,     pAUCx_d_neg=pAUCx_d_neg)
+                         AUCi_d     =AUCi_d,         # group measure, not normalized, should sum to the overall measure
+                         AUCni_d    =AUCni_d,        # group measure, normalized
+                         pAUC_d     =pAUC_d,        pAUCx_d     =pAUCx_d,  # not normalized
+                         pAUCn_d    =pAUCn_d,       pAUCxn_d    =pAUCxn_d,  # not normalized
+                         pAUC_d_pos =pAUC_d_pos,    pAUCx_d_pos =pAUCx_d_pos,
+                         pAUC_d_neg =pAUC_d_neg,    pAUCx_d_neg =pAUCx_d_neg)
     return measures_dict
+
+
+
+
 #enddef
 
 def showBayesianAUCmeasures(i, m, groupsArePerfectCoveringSet):
