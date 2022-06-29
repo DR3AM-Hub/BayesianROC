@@ -28,6 +28,7 @@ from deeproc.Helpers.transcript import stop  as Transcript_stop
 
 from Helpers.bayesianAUC        import getInputsFromUser
 from Helpers.acLogging          import findNextFileNumber
+from Helpers.rocInputHelp       import getYesAsTrue
 
 # pandas display option: 3 significant digits and all columns
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
@@ -44,62 +45,98 @@ logfn, testNum = findNextFileNumber(fnprefix, fnsuffix)
 # capture standard out to logfile
 Transcript_start(logfn)
 
+dataWDBC       = getYesAsTrue('Use Wisconsin Diagnostic Breast Cancer? [y]/n', default='y')
+if not dataWDBC:
+    print(f'Using Statlog Heart.')
+#endif
+
 # Inputs
 pArea_settings, bAUC_settings, costs, pcosts = getInputsFromUser()
 print(f'\npArea_settings: {pArea_settings}')
 print(f'bAUC_settings: {bAUC_settings}')
 print(f'costs: {costs}')
-dropSizeTexture = False
-dropSize        = False
-dropShape       = True
 
-# Load Wisconsin Breast Cancer data and do some data wrangling
-data = pd.read_csv("data.csv")
-print("\nThe data frame has {0[0]} rows and {0[1]} columns.".format(data.shape))
-# # Preview the first 5 lines of the loaded data 
-# data.info()
-# data.head(5)
+if dataWDBC:
+    # low performance
+    # dropSizeTexture = False
+    # dropSize        = True
+    # dropShape       = True
 
-print('\nRemoving the last column and the id column')
-data.drop(data.columns[[-1]], axis=1, inplace=True)
-data.drop(['id'], axis=1, inplace=True)
-if dropSizeTexture or dropSize:
-    c = 0
-    if dropSize:
-        features = ['radius', 'perimeter', 'area']
-        print(f'Dropped the size features ({c} in total).')
-    else:
-        features = ['radius', 'texture', 'perimeter', 'area']
-        print(f'Dropped the size and texture features ({c} in total).')
+    # medium performance
+    # dropSizeTexture = False
+    # dropSize        = False
+    # dropShape       = True
+
+    dropSizeTexture = getYesAsTrue('Drop size and texture? y/[n]', default='n')
+    dropSize        = getYesAsTrue('Drop size? y/[n]',             default='n')
+    dropShape       = getYesAsTrue('Drop shape? [y]/n',            default='y')
+
+    # Load Wisconsin Breast Cancer data and do some data wrangling
+    data = pd.read_csv("data.csv")
+    print("\nThe data frame has {0[0]} rows and {0[1]} columns.".format(data.shape))
+    # # Preview the first 5 lines of the loaded data
+    # data.info()
+    # data.head(5)
+
+    print('\nRemoving the id column and a hidden last column full of nan.')
+    # for some reason the column full of nan does not show in Excel, but is visible when the
+    # dataframe is viewed in debug mode in Python/Pycharm
+    data.drop(data.columns[[-1]], axis=1, inplace=True)
+    data.drop(['id'], axis=1, inplace=True)
+    if dropSizeTexture or dropSize:
+        c = 0
+        if dropSize:
+            features = ['radius', 'perimeter', 'area']
+            print(f'Dropped the size features ({c} in total).')
+        else:
+            features = ['radius', 'texture', 'perimeter', 'area']
+            print(f'Dropped the size and texture features ({c} in total).')
+        #endif
+        for feature in features:
+            for suffix in ['_mean', '_se', '_worst']:
+                data.drop([feature + suffix], axis=1, inplace=True)
+                c += 1
+            #endfor
+        #endfor
     #endif
-    for feature in features:
-        for suffix in ['_mean', '_se', '_worst']:
-            data.drop([feature + suffix], axis=1, inplace=True)
-            c += 1
+
+    if dropShape:
+        c = 0
+        features = ['smoothness', 'compactness', 'concavity', 'concave points', 'symmetry', 'fractal_dimension']
+        for feature in features:
+            for suffix in ['_mean', '_se', '_worst']:
+                data.drop([feature + suffix], axis=1, inplace=True)
+                c += 1
+            #endfor
         #endfor
-    #endfor
+        print(f'Dropped the shape features ({c} in total).')
+    #endif
+
+    # data.head(5)
+
+    target       = "diagnosis"
+    diag_map     = {'M':1, 'B':0}  # malignant is the positive event, benign is the negative
+    data[target] = data[target].map(diag_map) # series.map
+    features     = list(data.columns)
+    predictors   = features.copy()
+    predictors.remove(target)
+    random_state = 25
+    test_size    = 0.33
+else:
+    data = pd.read_csv("heart.csv")
+    print("\nThe data frame has {0[0]} rows and {0[1]} columns.".format(data.shape))
+    # # Preview the first 5 lines of the loaded data
+    # data.info()
+    # data.head(5)
+    target       = "heartDisease"
+    diag_map     = {1:0, 2:1}  # 1 absence, 2 presence of heart disease
+    data[target] = data[target].map(diag_map) # series.map
+    features     = list(data.columns)
+    predictors   = features.copy()
+    predictors.remove(target)
+    random_state = 26
+    test_size    = 0.20
 #endif
-
-if dropShape:
-    c = 0
-    features = ['smoothness', 'compactness', 'concavity', 'concave points', 'symmetry', 'fractal_dimension']
-    for feature in features:
-        for suffix in ['_mean', '_se', '_worst']:
-            data.drop([feature + suffix], axis=1, inplace=True)
-            c += 1
-        #endfor
-    #endfor
-    print(f'Dropped the shape features ({c} in total).')
-#endif
-
-# data.head(5)
-
-target       = "diagnosis"
-diag_map     = {'M':1, 'B':0}  # malignant is the positive event, benign is the negative
-data[target] = data[target].map(diag_map) # series.map
-features     = list(data.columns)
-predictors   = features.copy()
-predictors.remove(target)
 
 # Setup train/test splits and classifiers
 X = data[predictors]
@@ -108,9 +145,12 @@ y = data[target]
 patients = len(y)
 pos      = len(y[y == 1])
 neg      = len(y[y == 0])
-print(f'\nThe data have {patients} diagnoses, {pos} malignant and {neg} benign.')
-random_state = 25
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=random_state)
+if dataWDBC:
+    print(f'\nThe data have {patients} diagnoses, {pos} malignant and {neg} benign.')
+else:
+    print(f'\nThe data have {patients} diagnoses, {pos} with disease and {neg} without.')
+#endif
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
 print(f'The test split random seed is {random_state}\n')
 
 def compute_Acc_CostWeightedAcc(thresh, prevalence, newcosts, pred_proba, y_test):
@@ -164,6 +204,37 @@ def getRange(matchRng, approxRng):
     return [a, b]
 #enddef
 
+def showMeasures(resultName, groupAxis, groups, groupIndex, AUC, AUClow, AUChigh, groupMeasures,
+                 wholeMeasures):
+    if AUClow is not None and AUChigh is not None:
+        print(f'\n   {resultName} AUC is {AUC:0.3f} with confidence interval ({AUClow:0.3f}, {AUChigh:0.3f})')
+    else:
+        print(f'\n   {resultName} AUC is {AUC:0.3f}')
+    #     All: AUC_d vs.AUC_Omega of Mean ROC
+    print(f"   Mean AUC - 0.5                 is {AUC-0.5:.3f}")
+    print(f"   AUC_d        (- diagonal)      is {wholeMeasures['AUCi_d']:0.3f}")
+    print(f"   AUC_b        (- binary chance) is {wholeMeasures['AUCi_pi']:0.3f}")
+
+    print(f'\n   In the diagnostic ROI {groupAxis}={groups[groupIndex]} of the Mean ROC plot:')
+    print(f"   AUCni                          is {groupMeasures['AUCn_i']:0.3f}")
+    print(f"   AUCni_d                        is {groupMeasures['AUCni_d']:0.3f}")
+    print(f"   AUCni_b                        is {groupMeasures['AUCni_pi']:0.3f}")
+    #     ROI: AUC_d1 vs.AUC_Omega1
+    print(f"   AUCi_d       (- diagonal)      is {groupMeasures['AUCi_d']:0.3f}")
+    print(f"   AUCi_b       (- binary chance) is {groupMeasures['AUCi_pi']:0.3f}")
+    #          pAUC_d1 vs.pAUC_Omega1
+    print(f"   pAUC_d       (- diagonal)      is {groupMeasures['pAUC_d']:0.3f}")
+    print(f"   pAUC_b       (- binary chance) is {groupMeasures['pAUC_pi']:0.3f}")
+    print(f"   pAUCn_d      (- diagonal)      is {groupMeasures['pAUCn_d']:0.3f}")
+    print(f"   pAUCn_b      (- binary chance) is {groupMeasures['pAUCn_pi']:0.3f}")
+    #          pAUCx_d1 vs.pAUCx_Omega1
+    print(f"   pAUCx_d      (- diagonal)      is {groupMeasures['pAUCx_d']:0.3f}")
+    print(f"   pAUCx_b      (- binary chance) is {groupMeasures['pAUCx_pi']:0.3f}")
+    print(f"   pAUCxn_d     (- diagonal)      is {groupMeasures['pAUCxn_d']:0.3f}")
+    print(f"   pAUCxn_b     (- binary chance) is {groupMeasures['pAUCxn_pi']:0.3f}")
+    #     Note areas of negative utility
+#enddef
+
 def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     from Helpers.pointMeasures import optimal_ROC_point_indices
     from Helpers.pointMeasures import classification_point_measures
@@ -192,10 +263,11 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         newcosts      = dict(cFP=costs['FP'], cTN=costs['TN'], cFN=costs['FN'], cTP=costs['TP'])
         newcosts.update(dict(costsAreRates=False))
     else:
-        slope_factor1 = (neg / pos) ** 2
-        slope_factor2 = (costs['FPR'] - costs['TNR']) / (costs['FNR'] - costs['TPR'])
-        newcosts      = dict(cFP=costs['FPR'], cTN=costs['TNR'], cFN=costs['FNR'], cTP=costs['TPR'])
-        newcosts.update(dict(costsAreRates=True))
+        ValueError('mode==rates not yet supported')
+        # slope_factor1 = (neg / pos) ** 2
+        # slope_factor2 = (costs['FPR'] - costs['TNR']) / (costs['FNR'] - costs['TPR'])
+        # newcosts      = dict(cFP=costs['FPR'], cTN=costs['TNR'], cFN=costs['FNR'], cTP=costs['TPR'])
+        # newcosts.update(dict(costsAreRates=True))
     # endif
     slopeOrSkew = slope_factor1 * slope_factor2
 
@@ -222,7 +294,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         pred[pred >= opt_threshold] = 1
         conf            = confusion_matrix(y_cv_s[f], pred)
 
-        # get the measure from the confuion matrix
+        # get the measure from the confusion matrix
         prevalence      = pos / (pos + neg)
         measure         = classification_point_measures(conf, prevalence=prevalence, costs=newcosts)
         acc             = measure['Acc']
@@ -233,10 +305,16 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     # Done gathering each fold
 
     # Plot the mean ROC with the ROI FPR=[0,0,15] and its areas, highlighted
-    groupAxis  = 'FPR'
-    groups     = [[0, 0.15], [0, 0.023], [0, 1]]
+    groupAxis           = 'TPR'
+    groups              = [[0.85, 1], [0, 1]]
+    # groups              = [[0, 0.15], [0, 1]]
+    # groups            = [[0, 0.15], [0, 0.023], [0, 1]]
+    groupIndex_0_015    = 0
+    wholeIndex          = 1
+    # groupIndex_0_0023 = 1
+    # wholeIndex        = 2
+
     ROC.setGroupsBy(groupAxis=groupAxis, groups=groups, groupByClosestInstance=False)
-    groupIndex_0_015 = 0
     plotTitle  = f'Mean ROC for {name} highlighting group {groupIndex_0_015 + 1}'
     foldsNPclassRatio = neg / pos
     ROC.setPriorPoint(binaryChance)
@@ -248,9 +326,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
 
     # Measure diagnostic capability in ROI FPR=[0,0.15]
     passed, groupMeasures = ROC.analyzeGroup(groupIndex_0_015, showData=False, forFolds=True, quiet=True)
-    groupIndex_0_0023 = 1
-    passed, groupMeasures2 = ROC.analyzeGroup(groupIndex_0_0023, showData=False, forFolds=True, quiet=True)
-    wholeIndex = 2
+    # passed, groupMeasures2 = ROC.analyzeGroup(groupIndex_0_0023, showData=False, forFolds=True, quiet=True)
     passed, wholeMeasures = ROC.analyzeGroup(wholeIndex, showData=False, forFolds=True, quiet=True)
 
     print(f'\nCross-validation results:')
@@ -269,9 +345,9 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     #endif
     quiet = True
     thresholds = np.ones(ROC.mean_fpr.shape)
-    pfpr, ptpr, _1, _2, _3, _4 = ROC.getGroupForAUC(ROC.mean_fpr, ROC.mean_tpr, thresholds,
-                                                    groupAxis, groups[groupIndex_0_015],
-                                                    rocRuleLeft, rocRuleRight, quiet)
+    pfpr, ptpr, _0, _1, _2, _3, _4 = ROC.getGroupForAUC(ROC.mean_fpr, ROC.mean_tpr, thresholds,
+                                                        groupAxis, groups[groupIndex_0_015],
+                                                        rocRuleLeft, rocRuleRight, quiet)
     optIndicesROI = optimal_ROC_point_indices(pfpr, ptpr, slopeOrSkew)
     pfpr          = np.array(pfpr)
     ptpr          = np.array(ptpr)
@@ -281,7 +357,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     # Describe absolute and relative performance:
     prevalence = pos / (pos + neg)
     groupMeasures.update(ROC.analyzeGroupFoldsVsChance(groupIndex_0_015, prevalence, newcosts))
-    groupMeasures2.update(ROC.analyzeGroupFoldsVsChance(groupIndex_0_0023, prevalence, newcosts))
+    # groupMeasures2.update(ROC.analyzeGroupFoldsVsChance(groupIndex_0_0023, prevalence, newcosts))
     wholeMeasures.update(ROC.analyzeGroupFoldsVsChance(wholeIndex, prevalence, newcosts))
     meanAUC, AUChigh, AUClow, AUCs = ROC.getMeanAUC_andCI()
 
@@ -315,32 +391,11 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         print(f'\n   A_pi not shown.')
     #endif
 
-    print(f'\n   Mean AUC is {meanAUC:0.3f} with confidence interval ({AUClow:0.3f}, {AUChigh:0.3f})')
-    #     All: AUC_d vs.AUC_Omega of Mean ROC
-    print(f"   Mean AUC - 0.5                 is {meanAUC-0.5:.3f}")
-    print(f"   AUC_d        (- diagonal)      is {wholeMeasures['AUCi_d']:0.3f}")
-    print(f"   AUC_b        (- binary chance) is {wholeMeasures['AUCi_pi']:0.3f}")
+    showMeasures('Mean CV', groupAxis, groups, groupIndex_0_015, meanAUC, AUClow, AUChigh,
+                 groupMeasures, wholeMeasures)
 
-    if name == 'cart_gini':
-        print(f'\n   In the negative ROI {groupAxis}={groups[groupIndex_0_0023]} of the Mean ROC plot:')
-        print(f"   pAUC_b+      (- binary chance) is {groupMeasures2['pAUC_pi_pos']:0.3f}")
-        print(f"   pAUC_b-      (- binary chance) is {groupMeasures2['pAUC_pi_neg']:0.3f}")
-    #endif
+    ROC.analyze(forFolds=True)  # cannot use without scores/labels or thresholds
 
-    print(f'\n   In the diagnostic ROI {groupAxis}={groups[groupIndex_0_015]} of the Mean ROC plot:')
-    print(f"   AUCn_i                         is {groupMeasures['AUCn_i']:0.3f}")
-    print(f"   AUCni_d                        is {groupMeasures['AUCni_d']:0.3f}")
-    print(f"   AUCni_b                        is {groupMeasures['AUCni_pi']:0.3f}")
-    #     ROI: AUC_d1 vs.AUC_Omega1
-    print(f"   AUC_d1       (- diagonal)      is {groupMeasures['AUCi_d']:0.3f}")
-    print(f"   AUC_b        (- binary chance) is {groupMeasures['AUCi_pi']:0.3f}")
-    #          pAUC_d1 vs.pAUC_Omega1
-    print(f"   pAUC_d1      (- diagonal)      is {groupMeasures['pAUC_d']:0.3f}")
-    print(f"   pAUC_b       (- binary chance) is {groupMeasures['pAUC_pi']:0.3f}")
-    #          pAUCx_d1 vs.pAUCx_Omega1
-    print(f"   pAUCx_d1     (- diagonal)      is {groupMeasures['pAUCx_d']:0.3f}")
-    print(f"   pAUCx_b      (- binary chance) is {groupMeasures['pAUCx_pi']:0.3f}")
-    #     Note areas of negative utility
     # Hellinger distance
     # Confirm cost-weighted accuracy at:
     #     intersection of ROC and b_Omega is zero
@@ -381,12 +436,15 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         plt.scatter([A_pi[0]], [A_pi[1]], s=40, marker='o', alpha=1, facecolors='w', lw=2, edgecolors='k')
     #endif
 
-    pfpr, ptpr, _3, _4, matchRng, approxRng = ROCtest.getGroupForAUC(fpr, tpr, thresholds, groupAxis,
+    pfpr, ptpr, pthresh, _3, _4, matchRng, approxRng = ROCtest.getGroupForAUC(fpr, tpr, thresholds, groupAxis,
                                                                      groups[groupIndex_0_015],
                                                                      rocRuleLeft, rocRuleRight, quiet)
-    rng     = getRange(matchRng, approxRng)
-    pthresh = thresholds[rng[0]:rng[1]+1]
-
+    # rng     = getRange(matchRng, approxRng)
+    # pthresh = thresholds[rng[0]:rng[1]+1]
+    # if approxRng[0] != 'NA':
+    #     pthresh = np.insert(pthresh, 0, pthresh[0])
+    # if approxRng[1] != 'NA':
+    #     pthresh = np.append(pthresh, pthresh[-1])
     optIndicesROI = optimal_ROC_point_indices(pfpr, ptpr, slopeOrSkew)
     pfpr    = np.array(pfpr)
     ptpr    = np.array(ptpr)
@@ -396,7 +454,11 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     plotFileName = f'ROC_Test_{name}_{testNum}'
     fig3.savefig(f'{output_dir}/{plotFileName}.png')
 
-    # ROCmeetsBaselineIndices = ROC_meets_Baseline_indices(fpr, tpr, slopeOrSkew)
+    # use prevalence specified (not specific to the fold or test set)
+    passed, groupMeasures = ROCtest.analyzeGroup(groupIndex_0_015, showData=False, forFolds=False, quiet=True)
+    passed, wholeMeasures = ROCtest.analyzeGroup(wholeIndex, showData=False, forFolds=False, quiet=True)
+    groupMeasures.update(ROCtest.analyzeGroupVsChance(groupIndex_0_015, prevalence, newcosts))
+    wholeMeasures.update(ROCtest.analyzeGroupVsChance(wholeIndex, prevalence, newcosts))
 
     conf_header  = '  predicted\n  neg  pos'
     test_Acc     = None  # temporary value
@@ -405,7 +467,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
                                 'All Negative Classifier (A-) ROC', 'All Positive Classifier (A+) ROC'],
                            [thresholds[optIndicesROC[0]], pthresh[optIndicesROI[0]],
                                 np.max(thresholds), np.min(thresholds)],
-                           [(fpr[optIndicesROC[0]], tpr[optIndicesROC[0]]), (fpr[optIndicesROI[0]], tpr[optIndicesROI[0]]),
+                           [(fpr[optIndicesROC[0]], tpr[optIndicesROC[0]]), (pfpr[optIndicesROI[0]], ptpr[optIndicesROI[0]]),
                                 (0, 0), (1, 1)]):
 
         xAcc, xcwAcc, xFixedCosts, conf = compute_Acc_CostWeightedAcc(t, prevalence, newcosts, pred_proba, y_test)
@@ -420,8 +482,9 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
         print(conf)
         print(f'   Accuracy {xAcc:0.2f}, Cost Weighted Accuracy {xcwAcc:0.2f}, Fixed Costs {xFixedCosts:0.2f}')
 
-    for namep, p, circ in zip(['chance', 'perfect', 'worst'], [(0.5, 0.5), (0, 1), (1, 0)],
-                              [', solid black circle', '', '']):
+    for namep, p, circ in zip(['chance', 'perfect', 'worst', 'intersecting'],
+                              [(0.5, 0.5), (0, 1), (1, 0), (A_pi[0], A_pi[1])],
+                              [', solid black circle', '', '', ', hollow black circle']):
         print(f"\n   For the {namep} ROC point at ({p[0]:0.2f}, {p[1]:0.2f}){circ}:")
         xAcc          = prevalence       * p[1]     + \
                         (1 - prevalence) * (1-p[0])
@@ -431,6 +494,12 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
                         (1 - prevalence) * (newcosts['cFP'] - newcosts['cTN']) * p[0] - \
                         xFixedCosts
         print(f'   Accuracy {xAcc:0.2f}, Cost Weighted Accuracy {xcwAcc:0.2f}, Fixed Costs {xFixedCosts:0.2f}')
+    #endfor
+
+    showMeasures('Mean CV', groupAxis, groups, groupIndex_0_015, testAUC, None, None,
+                 groupMeasures, wholeMeasures)
+
+    ROCtest.analyze()
 
     Transcript_stop()
     plt.show()
@@ -439,7 +508,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
 
     end     = time.time()
     elapsed = end - start
-    print("--> end:" + name + " in "+ str(elapsed) +" seconds\n")
+    print("--> end:" + name + f" in {elapsed:0.3f} seconds\n")
     return ret
 #enddef
 

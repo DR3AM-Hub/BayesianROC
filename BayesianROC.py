@@ -3,9 +3,6 @@
 # by André Carrington and Franz Mayr
 
 from deeproc.DeepROC import DeepROC
-#import sys
-#sys.path.append('/Users/andrecarrington/deepROC')
-#from DeepROC import DeepROC
 
 class BayesianROC(DeepROC):
 
@@ -57,7 +54,7 @@ class BayesianROC(DeepROC):
         from Helpers.BayesianROCFunctions import BayesianAUC
 
         returnValues     = self.getGroupForAUCi(groupIndex, forFolds)
-        groupByOtherAxis = returnValues[2]
+        groupByOtherAxis = returnValues[3]
         if self.groupAxis == 'FPR':
             group = dict(x1=self.groups[groupIndex][0],
                          x2=self.groups[groupIndex][1],
