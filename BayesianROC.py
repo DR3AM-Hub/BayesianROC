@@ -6,7 +6,7 @@ from deeproc.DeepROC import DeepROC
 
 class BayesianROC(DeepROC):
 
-    def __init__(self, predicted_scores=None, labels=None, poslabel=None, BayesianPrior=None,
+    def __init__(self, predicted_scores=None, labels=None, poslabel=None, BayesianPriorPoint=None,
                  costs=None, quiet=False):
         '''BayesianROC constructor. If predicted_scores and labels are
            empty then it returns an empty object.'''
@@ -14,43 +14,55 @@ class BayesianROC(DeepROC):
         super().__init__(predicted_scores=predicted_scores, labels=labels, poslabel=poslabel, quiet=quiet)
 
         #   Bayesian ROC...
-        self.BayesianPrior  = BayesianPrior
-        self.costs          = costs
+        self.BayesianPriorPoint  = BayesianPriorPoint
+        self.costs               = costs
     #enddef
 
     def analyzeGroupFoldsVsChance(self, groupIndex, prevalence, costs):
-        prior    = (0.5, 0.5)
+        BayesianPriorPoint = (0.5, 0.5)
         forFolds = True
-        return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
+        return self.analyzeGroupVs(groupIndex, prevalence, costs, BayesianPriorPoint, forFolds)
     #enddef
 
     def analyzeGroupVsChance(self, groupIndex, prevalence, costs):
-        prior    = (0.5, 0.5)
+        BayesianPriorPoint = (0.5, 0.5)
         forFolds = False
-        return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
+        return self.analyzeGroupVs(groupIndex, prevalence, costs, BayesianPriorPoint, forFolds)
     #enddef
 
-    def analyzeGroupFoldsVsPrior(self, groupIndex, prevalence, costs, prior):
+    def analyzeGroupFoldsVsPrior(self, groupIndex, prevalence, costs, BayesianPriorPoint):
+        if 'BayesianPriorPoint' not in locals():
+            BayesianPriorPoint = self.BayesianPriorPoint
         forFolds = True
-        return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
+        return self.analyzeGroupVs(groupIndex, prevalence, costs, BayesianPriorPoint, forFolds)
     # enddef
 
-    def analyzeGroupVsPrior(self, groupIndex, prevalence, costs, prior):
+    def analyzeGroupVsPrior(self, groupIndex, prevalence, costs, BayesianPriorPoint):
+        if 'BayesianPriorPoint' not in locals():
+            BayesianPriorPoint = self.BayesianPriorPoint
         forFolds = False
-        return self.analyzeGroupVs(groupIndex, prevalence, costs, prior, forFolds)
+        return self.analyzeGroupVs(groupIndex, prevalence, costs, BayesianPriorPoint, forFolds)
     #enddef
 
-    def getMeanROC_A_pi(self, prevalence, costs, prior):
+    def getMeanROC_A_pi(self, prevalence, costs, BayesianPriorPoint):
         from Helpers.BayesianROCFunctions import getA_pi
-        return getA_pi(self.mean_fpr, self.mean_tpr, prevalence, costs, prior)
+        if 'BayesianPriorPoint' not in locals():
+            BayesianPriorPoint = self.BayesianPriorPoint
+        return getA_pi(self.mean_fpr, self.mean_tpr, prevalence, costs, BayesianPriorPoint)
     #enddef
 
-    def getA_pi(self, prevalence, costs, prior):
+    def getA_pi(self, prevalence, costs, BayesianPriorPoint):
         from Helpers.BayesianROCFunctions import getA_pi
-        return getA_pi(self.full_fpr, self.full_tpr, prevalence, costs, prior)
+        if 'BayesianPriorPoint' not in locals():
+            BayesianPriorPoint = self.BayesianPriorPoint
+        return getA_pi(self.full_fpr, self.full_tpr, prevalence, costs, BayesianPriorPoint)
     #enddef
 
-    def analyzeGroupVs(self, groupIndex, prevalence, costs, prior, forFolds):
+    def setBayesianPriorPoint(self, BayesianPriorPoint):
+        self.BayesianPriorPoint = BayesianPriorPoint
+    #enddef
+
+    def analyzeGroupVs(self, groupIndex, prevalence, costs, BayesianPriorPoint, forFolds):
         from Helpers.BayesianROCFunctions import BayesianAUC
 
         returnValues     = self.getGroupForAUCi(groupIndex, forFolds)
@@ -71,9 +83,9 @@ class BayesianROC(DeepROC):
         #endif
 
         if forFolds:
-            measures_dict = BayesianAUC(self.mean_fpr, self.mean_tpr, group, prevalence, costs, prior)
+            measures_dict = BayesianAUC(self.mean_fpr, self.mean_tpr, group, prevalence, costs, BayesianPriorPoint)
         else:
-            measures_dict = BayesianAUC(self.full_fpr, self.full_tpr, group, prevalence, costs, prior)
+            measures_dict = BayesianAUC(self.full_fpr, self.full_tpr, group, prevalence, costs, BayesianPriorPoint)
         #endif
 
         # # to compute Bhattacharyya Dissimilarity (1 - Bhattacharyya Coefficient) we need to
@@ -92,16 +104,16 @@ class BayesianROC(DeepROC):
     #enddef
 
     # modified slightly:
-    def plotBayesianIsoLine(self, priorPoint, neg, pos, costs):
+    def plotBayesianIsoLine(self, BayesianPriorPoint, neg, pos, costs):
         from   Helpers.BayesianROCFunctions  import bayesian_iso_lines
         import numpy               as     np
         import matplotlib.pyplot   as     plt
 
         # plot iso_line that passes through the (bayesian) prior point
-        bayes_iso_line_y, bayes_iso_line_x = bayesian_iso_lines(pos/(pos+neg), costs, priorPoint)
+        bayes_iso_line_y, bayes_iso_line_x = bayesian_iso_lines(pos/(pos+neg), costs, BayesianPriorPoint)
         x = np.linspace(0, 1, 1000)
         plt.plot(x, bayes_iso_line_y(x), linestyle='-', color='black')
-        plt.plot([priorPoint[0]], [priorPoint[1]], 'ko')
+        plt.plot([BayesianPriorPoint[0]], [BayesianPriorPoint[1]], 'ko')
     # enddef
 
     def plotGroup(self, plotTitle, groupIndex, showError=False, showThresholds=True, showOptimalROCpoints=True,
@@ -111,7 +123,7 @@ class BayesianROC(DeepROC):
                                     costs, saveFileName, numShowThresh, showPlot, labelThresh, full_fpr_tpr)
         pos = 1 / (self.NPclassRatio + 1)
         neg = 1 - pos
-        self.plotBayesianIsoLine(self.priorPoint, neg, pos, costs)
+        self.plotBayesianIsoLine(self.BayesianPriorPoint, neg, pos, costs)
         return fig, ax
     #enddef
 
@@ -123,7 +135,7 @@ class BayesianROC(DeepROC):
                                             numShowThresh, showPlot, labelThresh, full_fpr_tpr)
         pos = 1/(foldsNPclassRatio + 1)
         neg = 1 - pos
-        self.plotBayesianIsoLine(self.priorPoint, neg, pos, costs)
+        self.plotBayesianIsoLine(self.BayesianPriorPoint, neg, pos, costs)
         return fig, ax
     #enddef
 
@@ -132,6 +144,6 @@ class BayesianROC(DeepROC):
            predicted scores, labels, full fpr, full tpr, full thresholds.'''
         super().__str__()
 
-        rocdata = f'BayesianPrior = {self.BayesianPrior}\n'
+        rocdata = f'BayesianPriorPoint = {self.BayesianPriorPoint}\n'
         return rocdata
     #enddef 
