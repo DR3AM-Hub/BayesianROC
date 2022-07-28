@@ -67,6 +67,11 @@ if dataWDBC:
     # dropSize        = False
     # dropShape       = True
 
+    # high performance
+    # dropSizeTexture = False
+    # dropSize        = False
+    # dropShape       = False
+
     dropSizeTexture = getYesAsTrue('Drop size and texture? y/[n]', default='n')
     dropSize        = getYesAsTrue('Drop size? y/[n]',             default='n')
     dropShape       = getYesAsTrue('Drop shape? [y]/n',            default='y')
@@ -74,9 +79,6 @@ if dataWDBC:
     # Load Wisconsin Breast Cancer data and do some data wrangling
     data = pd.read_csv("data.csv")
     print("\nThe data frame has {0[0]} rows and {0[1]} columns.".format(data.shape))
-    # # Preview the first 5 lines of the loaded data
-    # data.info()
-    # data.head(5)
 
     print('\nRemoving the id column and a hidden last column full of nan.')
     # for some reason the column full of nan does not show in Excel, but is visible when the
@@ -125,14 +127,11 @@ if dataWDBC:
 else:
     data = pd.read_csv("heart.csv")
     print("\nThe data frame has {0[0]} rows and {0[1]} columns.".format(data.shape))
-    # # Preview the first 5 lines of the loaded data
-    # data.info()
-    # data.head(5)
     target       = "heartDisease"
     diag_map     = {1:0, 2:1}  # 1 absence, 2 presence of heart disease
     data[target] = data[target].map(diag_map) # series.map
-    features     = list(data.columns)
-    predictors   = features.copy()
+    temp         = list(data.columns)
+    predictors   = temp.copy()
     predictors.remove(target)
     random_state = 26
     test_size    = 0.20
@@ -168,7 +167,7 @@ def get_trainer(param, class_weight = None):
             trainer = DecisionTreeClassifier(random_state = 1, criterion = "entropy", class_weight = class_weight)
         elif param == 'cart_gini':
             trainer = DecisionTreeClassifier(random_state = 1, criterion = "gini", class_weight = class_weight)
-        elif param == 'svm':
+        elif param == 'svm_linear':
             trainer = LinearSVC()
         elif param == 'ada_boost':
             #Does not support class_weight
@@ -272,7 +271,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     slopeOrSkew = slope_factor1 * slope_factor2
 
     binaryChance = (0.5, 0.5)
-    ROC = BayesianROC(predicted_scores=None, labels=None, poslabel=None, BayesianPrior=binaryChance,
+    ROC = BayesianROC(predicted_scores=None, labels=None, poslabel=None, BayesianPriorPoint=binaryChance,
                       costs=newcosts)
     for f in range(0, total_folds):
         trainerCV.fit(X_train_df[f], y_train_s[f])
@@ -317,7 +316,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     ROC.setGroupsBy(groupAxis=groupAxis, groups=groups, groupByClosestInstance=False)
     plotTitle  = f'Mean ROC for {name} highlighting group {groupIndex_0_015 + 1}'
     foldsNPclassRatio = neg / pos
-    ROC.setPriorPoint(binaryChance)
+    ROC.setBayesianPriorPoint(binaryChance)
     ROC.setFoldsNPclassRatio(foldsNPclassRatio)
     fig1, ax1 = ROC.plotGroupForFolds(plotTitle, groupIndex_0_015, foldsNPclassRatio, showError=False,
                                       showThresholds=True, showOptimalROCpoints=True, costs=newcosts,
@@ -409,7 +408,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     pred_proba  = pred_proba[:, 1]
 
     #fpr, tpr, threshold = roc_curve(y_test, pred_proba)
-    ROCtest     = BayesianROC(predicted_scores=pred_proba, labels=y_test, poslabel=1, BayesianPrior=(0.5, 0.5),
+    ROCtest     = BayesianROC(predicted_scores=pred_proba, labels=y_test, poslabel=1, BayesianPriorPoint=(0.5, 0.5),
                               costs=newcosts, quiet=True)
     print(f'\nTest results:')
 
@@ -421,7 +420,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     fpr, tpr, thresholds  = ROCtest.full_fpr, ROCtest.full_tpr, ROCtest.full_thresholds
     plotTitle   = f'Test ROC for {name} highlighting group {groupIndex_0_015 + 1}'
     ROCtest.setNPclassRatio(foldsNPclassRatio)
-    ROCtest.setPriorPoint(binaryChance)
+    ROCtest.setBayesianPriorPoint(binaryChance)
     fig3, ax3   = ROCtest.plotGroup(plotTitle, groupIndex_0_015, showError=False,
                                     showThresholds=True, showOptimalROCpoints=True, costs=newcosts,
                                     saveFileName=None, numShowThresh=20, showPlot=False, labelThresh=True,
@@ -514,7 +513,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
 
 # modified a little:
 def run_many_classifiers(X_train, X_test, y_train, y_test, pos, neg, costs):
-    #classifiers = ['cart', 'svm', 'naive_bayes', 'ada_boost', 'rnd_forest']
+    #classifiers = ['cart', 'svm_linear', 'naive_bayes', 'ada_boost', 'rnd_forest']
     classifiers = ['cart_entropy', 'cart_gini', 'naive_bayes', 'ada_boost', 'rnd_forest']
     # classifiers = ['cart_gini', 'naive_bayes', 'ada_boost', 'rnd_forest']
     results = []
