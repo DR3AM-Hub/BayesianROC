@@ -70,15 +70,23 @@ class BayesianROC(DeepROC):
         returnValues     = self.getGroupForAUCi(groupIndex, forFolds)
         groupByOtherAxis = returnValues[3]
         if self.groupAxis == 'FPR':
-            group = dict(x1=self.groups[groupIndex][0],
-                         x2=self.groups[groupIndex][1],
-                         y1=groupByOtherAxis[0],
-                         y2=groupByOtherAxis[1])
+            if groupIndex == -1:  # whole ROC curve
+                group = dict(x1=0, x2=1, y1=0, y2=1)  # whole ROC curve
+            else:
+                group = dict(x1=self.groups[groupIndex][0],
+                             x2=self.groups[groupIndex][1],
+                             y1=groupByOtherAxis[0],
+                             y2=groupByOtherAxis[1])
+            #endif
         elif self.groupAxis == 'TPR':
-            group = dict(y1=self.groups[groupIndex][0],
-                         y2=self.groups[groupIndex][1],
-                         x1=groupByOtherAxis[0],
-                         x2=groupByOtherAxis[1])
+            if groupIndex == -1:  # whole ROC curve
+                group = dict(x1=0, x2=1, y1=0, y2=1)  # whole ROC curve
+            else:
+                group = dict(y1=self.groups[groupIndex][0],
+                             y2=self.groups[groupIndex][1],
+                             x1=groupByOtherAxis[0],
+                             x2=groupByOtherAxis[1])
+            #endif
         else:
             SystemError(f'This function has not been implemented yet for groupAxis=={self.groupAxis}.')
             group = None
@@ -166,16 +174,20 @@ class BayesianROC(DeepROC):
             return (nbValue-minNB)/abs(minNB)
 
         Omega         = '\u03A9'
+
+        # define header rows
         Header1       = ['',            'ROC'  , '',         'Balanced', 'Avg Net', 'Cost Weighted']
         Header2       = ['Description', 'point', 'Accuracy', 'Accuracy', 'Benefit', 'Accuracy'     ]
-        for h in [Header1, Header2]:
-            print(f'{indent}{h[0]:27s}  {h[1]:14s}  {h[2]:9s}  {h[3]:9s}  {h[4]:9s} {h[5]:14s}')
 
+        # build content rows
         rows   = []
         if self.foldsNPclassRatio is not None and self.NPclassRatio is None:
+            print(f'NP class ratio: {self.foldsNPclassRatio:0.2f}')
             prev = 1 / (self.foldsNPclassRatio + 1)
         else:
+            print(f'NP class ratio: {self.NPclassRatio:0.2f}')
             prev = 1 / (self.NPclassRatio + 1)
+        print(f'prevalence: {prev:0.2f}')
         costs  = self.costs
         minNB  = nb((1, 0), prev, costs)
 
@@ -211,6 +223,7 @@ class BayesianROC(DeepROC):
             else:
                 slope_factor1 = self.NPclassRatio
             slope_factor2 = (costs['cFP'] - costs['cTN']) / (costs['cFN'] - costs['cTP'])
+            print(f"C_FN : C_FP = {costs['cFN']:0.1f}:{costs['cFP']:0.1f}")
             # slope_factor2 = (costs['FP'] - costs['TN']) / (costs['FN'] - costs['TP'])
             # newcosts      = dict(cFP=costs['FP'], cTN=costs['TN'], cFN=costs['FN'], cTP=costs['TP'])
             # newcosts.update(dict(costsAreRates=False))
@@ -256,6 +269,9 @@ class BayesianROC(DeepROC):
         #endfor
 
         # format and print all rows
+        for h in [Header1, Header2]:
+            print(f'{indent}{h[0]:27s}  {h[1]:14s}  {h[2]:9s}  {h[3]:9s}  {h[4]:9s} {h[5]:14s}')
+
         max_rows = len(rows)
         for y in range(0, max_rows):
             if len(rows[y]) == 1:
@@ -293,15 +309,21 @@ class BayesianROC(DeepROC):
             k = g * 4
             if groups[g] == [0, 1]:  # regardless of float or int type
                 # whole curve
-                rows[k+0] = [f'group {g + 1}: {groupAxis} {groups[g]}']
-                rows[k+1] = ['AUC', '-', groupMeasures[g]['AUC_i'], groupMeasures[g]['pAUC'], groupMeasures[g]['pAUCx']]
-                rows[k+2] = ['AUC_d', groupMeasures[g]['AUCi_d'], '-', groupMeasures[g]['pAUC_d'], groupMeasures[g]['pAUCx_d']]
-                rows[k+3] = [f'AUC_{priorSubscript}', groupMeasures[g]['AUCi_pi'], '-', groupMeasures[g]['pAUC_pi'], groupMeasures[g]['pAUCx_pi']]
-            else:
+                rows[k+0] = [f'group {g + 1}: {groupAxis} [{groups[g][0]:0.2f}, {groups[g][1]:0.2f}]']
+                rows[k+1] = ['AUC',                     '-',                          groupMeasures[g]['AUC_i'],
+                                                        groupMeasures[g]['pAUC'],     groupMeasures[g]['pAUCx']]
+                rows[k+2] = ['AUC_d',                   groupMeasures[g]['AUCi_d'],   '-',
+                                                        groupMeasures[g]['pAUC_d'],   groupMeasures[g]['pAUCx_d']]
+                rows[k+3] = [f'AUC_{priorSubscript}',   groupMeasures[g]['AUCi_pi'],  '-',
+                                                        groupMeasures[g]['pAUC_pi'],  groupMeasures[g]['pAUCx_pi']]
+            else:  # part curve
                 rows[k+0] = [f'group {g+1}: {groupAxis} {groups[g]}']
-                rows[k+1] = ['AUCni', groupMeasures[g]['AUC_i'], groupMeasures[g]['AUCn_i'], groupMeasures[g]['pAUCn'], groupMeasures[g]['pAUCxn']]
-                rows[k+2] = ['AUCni_d', groupMeasures[g]['AUCni_d'], '-', groupMeasures[g]['pAUCn_d'], groupMeasures[g]['pAUCxn_d']]
-                rows[k+3] = [f'AUCni_{priorSubscript}', groupMeasures[g]['AUCni_pi'], '-', groupMeasures[g]['pAUCn_pi'], groupMeasures[g]['pAUCxn_pi']]
+                rows[k+1] = ['AUC',                     groupMeasures[g]['AUC_i'],    groupMeasures[g]['AUCn_i'],
+                                                        groupMeasures[g]['pAUCn'],    groupMeasures[g]['pAUCxn']]
+                rows[k+2] = ['AUC - diagonal',          groupMeasures[g]['AUCi_d'],   groupMeasures[g]['AUCni_d'],
+                                                        groupMeasures[g]['pAUCn_d'],  groupMeasures[g]['pAUCxn_d']]
+                rows[k+3] = [f'AUC - {priorSubscript}', groupMeasures[g]['AUCi_pi'],  groupMeasures[g]['AUCni_pi'],
+                                                        groupMeasures[g]['pAUCn_pi'], groupMeasures[g]['pAUCxn_pi']]
             # endif
         # endfor
 

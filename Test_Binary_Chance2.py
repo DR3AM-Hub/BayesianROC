@@ -273,9 +273,10 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     # Done gathering each fold
 
     # Plot the mean ROC with the ROI FPR=[0,0,15] and its areas, highlighted
-    groupAxis           = 'TPR'
-    groups              = [[0.85, 1], [0, 1]]
-    # groups              = [[0, 0.15], [0, 1]]
+    # groupAxis           = 'TPR'
+    # groups              = [[0.85, 1], [0, 1]]
+    groupAxis           = 'FPR'
+    groups              = [[0, 0.15], [0, 1]]
     # groups            = [[0, 0.15], [0, 0.023], [0, 1]]
     groupIndex_0_015    = 0
     wholeIndex          = 1
@@ -285,6 +286,7 @@ def run_classifier(name, X_train, X_test, y_train, y_test, pos, neg, costs):
     ROC.setGroupsBy(groupAxis=groupAxis, groups=groups, groupByClosestInstance=False)
     plotTitle  = f'Mean ROC for {name} highlighting group {groupIndex_0_015 + 1}'
     foldsNPclassRatio = neg / pos
+    print(f'foldsNPclassratio: {foldsNPclassRatio}')
     ROC.setBayesianPriorPoint(binaryChance)
     ROC.setFoldsNPclassRatio(foldsNPclassRatio)
     fig1, ax1 = ROC.plotGroupForFolds(plotTitle, groupIndex_0_015, foldsNPclassRatio, showError=False,
