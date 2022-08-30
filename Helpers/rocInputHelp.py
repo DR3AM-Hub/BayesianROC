@@ -33,6 +33,7 @@ def getYes(prompt,yes='y',no='n',default='y'):
         if response != '':
             print(f'Response not recognized, using default: {default}')
         response = default
+        print(f'{default}')
     #endif
     return response
 #enddef
@@ -71,11 +72,110 @@ def getROCpoint(prompt):
     return [x,y]
 #enddef
 
-def getROCranges(pArea_range_p):
-    pArea_range_text = input(pArea_range_p+'  ')
-    if pArea_range_text == '':
-        print('Using default: [0:0.33],[0.33:0.66],[0.66:1.0]') 
-        pArea_range=[[0,0.33],[0.33,0.66],[0.66,1.0]]
+def getChoice(options=[], default=1):
+  if len(options) == 0 or not str(default).isdigit():
+    return 0
+  
+  # show options
+  c = 0
+  for i in options:
+    c = c + 1
+    print(f'  {c}. {i}')
+
+  # get choice
+  choice = 0
+  while not str(choice).isdigit() or choice<1 or choice>len(options):
+    choice = input(f'\nPlease indicate your choice [default {default}]:')
+    if choice == '':
+      choice = default
+      print(f'{choice:d}')
+    choice = int(choice)
+  
+  return choice
+#enddef
+
+def getNumber(prompt='Please enter a number', requireInt=False, \
+              default=None, requireMin=-np.Inf, requireMax=np.Inf):
+    invalid = True
+    while invalid:
+        response = input(prompt+'  ')
+        if response == '' and default is not None:
+            if requireInt:
+                response = int(default)
+                print(f'{response:d}')
+            else:
+                response = float(default)
+                print(f'{response:0.3f}')
+            #endif
+            return response
+        else:
+            try:
+                response = float(input(prompt+'  '))
+                if requireInt:
+                    response = int(response)
+                if response >= requireMin and response <= requireMax:
+                    return response
+                    #invalid = False
+                else:
+                    print(f'Value out of range [{requireMin}, {requireMax}], try again.')
+                #endif
+            except ValueError:
+                print('Not a number, try again.')
+            #endtry
+        #endif
+    #endwhile
+    return response
+#enddef
+
+def getList(prompt='Please enter a horizontal list of comma separated ' + \
+                   'values on one or more lines, with a final blank line.',
+            requiredLength=0,
+            requiredLengthMessage='Length does not match. Please try again.',
+            require01=False,
+            default=None):
+  if default is not None:
+    prompt = prompt + f'default = {default}\n: '
+  c = 0
+  firstTry = True
+  failed01 = False
+  while c != requiredLength or firstTry or failed01:
+    if not firstTry and not failed01:
+      print(requiredLengthMessage)
+    text  = input(prompt)
+    if text == '':
+      alist = default
+      break
+    alist = [i for i in list(text.split(","))]
+    c     = 0
+    failed01 = False
+    for item in alist:
+      try:
+        alist[c] = float(item)
+      except:
+        alist[c]   = np.nan
+        break
+      if require01 and alist[c]!=0.0 and alist[c]!=1.0:
+        print('List values must be in [0,1]')
+        failed01 = True
+        break
+      c = c + 1
+    #endfor
+    if requiredLength == 0 and not failed01:
+      break
+    firstTry = False
+  #endwhile
+  return alist
+#enddef
+
+def getROCgroups(prompt, default):
+    pArea_range_text = ''
+    while pArea_range_text.find(':') == -1:
+        if pArea_range_text != '':
+            print('Each group or range needs a ":", please try again.') 
+        pArea_range_text = input(prompt)
+
+    if   pArea_range_text == '':
+        pArea_range=default
     else:
         # given input text:        '[0:0.2],[0.2:0.5],[0.5:1.0]'
         # create a list of lists: [[0.0,0.2], [0.2,0.5], [0.5,1.0]]
@@ -97,11 +197,11 @@ def getROCranges(pArea_range_p):
             raise
         #endtry
     #endif
-    
-    # assume pArea_range is lowest to highest (not checked)
+
+    # assume pArea_range is lowest to highest as requested (not checked)
 
     # assess if pArea ranges completely span [0,1]
-    num_parts      = len(pArea_range)        
+    num_parts      = len(pArea_range)      
     pArea_complete = 0
     if pArea_range[0][0]==0.0 and pArea_range[-1][-1]==1.0:
         pArea_complete = 1 # assume completeness unless we find otherwise...

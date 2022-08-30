@@ -32,7 +32,7 @@ def classification_point_measures(conf, prevalence, costs):
     stat['FOR']  = FN/(FN+TN)                          # False Omission Rate
 
     stat['Acc']  = (TP+TN)/(TP+TN+FP+FN)               # Accuracy
-    stat['BAcc'] = (stat['Sens']+stat['Spec'])/0.5     # Balanced Accuracy
+    stat['BAcc'] = (stat['Sens']+stat['Spec'])*0.5     # Balanced Accuracy
     stat['GAcc'] = (stat['Sens']*stat['Spec'])**0.5    # Geo-Mean Accuracy
     # from Metz, equation 6 in my NB paper
     stat['fixed_costs'] = prevalence * cFN + neg_prevalence * cTN
@@ -41,7 +41,7 @@ def classification_point_measures(conf, prevalence, costs):
 
     stat['BPV']  = (stat['PPV'] +stat['NPV'] )/0.5     # Balanced Predictive Value (new definition, previously was a geo-mean)
     stat['GPV']  = (stat['PPV'] *stat['NPV'] )**0.5    # Geo-Mean Balanced Predictive Value
-    stat['MC']   = 1 - stat['Acc']                     # Misclassification Cost
+    stat['Mis']   = 1 - stat['Acc']                     # Misclassification Cost
 
     if (1-stat['Spec']) != 0:
         stat['LR+']  =     stat['Sens'] /(1-stat['Spec'])  # Likelihood Ratio Positive, Likelihood Ratio
@@ -67,7 +67,7 @@ def classification_point_measures(conf, prevalence, costs):
 
     stat['Mark'] = stat['PPV']  + stat['NPV']  - 1     # Markedness
 
-    stat['MCC']  = (TP*TN - FP*FN) / ((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN)) # Matthew's Correlation Coefficient
+    stat['MCC']  = (TP*TN - FP*FN) / np.sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN)) # Matthew's Correlation Coefficient
 
     return stat
 #enddef

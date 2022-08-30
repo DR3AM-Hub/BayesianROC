@@ -47,10 +47,10 @@ def CarringtonCost(prevalence, costs):
     #endif
 #enddef
 
-def bayesian_iso_lines(prevalence, costs, prior):
+def bayesian_iso_lines(prevalence, costs, BayesianPriorPoint):
     # iso performance line that passes through a point representing a Bayesian prior (e.g., prevalence)
-    x_prior = prior[0]
-    y_prior = prior[1]
+    x_prior = BayesianPriorPoint[0]
+    y_prior = BayesianPriorPoint[1]
     
     if costs['costsAreRates']:
         m = CarringtonCost(prevalence, costs)
@@ -108,17 +108,6 @@ def resolvePrevalence(popPrevalence, newlabels):
     return prevalence
 #enddef
 
-def resolvePrior(BayesianPrior, prevalence):
-    if BayesianPrior == None:
-        # BayesianPrior not specified then use the prevalence as the prior (population or sample, as above)
-        prior = (prevalence, prevalence)
-        print(f'Using the prevalence {prior} as the prior, because the Bayesian prior was not specified.')
-    else:
-        prior = BayesianPrior
-        print(f'Using the Bayesian prior {prior}, as specified.')
-    #endif
-#enddef
-
 def plot_major_diagonal():
     import matplotlib.pyplot as plt
     import numpy as np
@@ -127,18 +116,18 @@ def plot_major_diagonal():
     plt.plot(x, x, linestyle='-', color='black', linewidth=0.25)
 #enddef
 
-def plot_bayesian_iso_line(prevalence, costs, prior):
+def plot_bayesian_iso_line(prevalence, costs, BayesianPriorPoint):
     import matplotlib.pyplot as plt
     import numpy as np
-    bayes_iso_line_y, bayes_iso_line_x = bayesian_iso_lines(prevalence, costs, prior)
+    bayes_iso_line_y, bayes_iso_line_x = bayesian_iso_lines(prevalence, costs, BayesianPriorPoint)
     x = np.linspace(0, 1, 1000)
     plt.plot(x, bayes_iso_line_y(x), linestyle='-', color='black')
-    plt.plot(prior[0], prior[1], 'ro')
+    plt.plot(BayesianPriorPoint[0], BayesianPriorPoint[1], 'ro')
 #enddef
 
 def ChanceAUC(fpr, tpr, group, prevalence, costs):
-    prior = (0.5, 0.5)  # binary chance
-    return BayesianAUC(fpr, tpr, group, prevalence, costs, prior)
+    BayesianPriorPoint = (0.5, 0.5)  # binary chance
+    return BayesianAUC(fpr, tpr, group, prevalence, costs, BayesianPriorPoint)
 #enddef
 
 def alterForRoot(fpr, tpr):
@@ -177,7 +166,7 @@ def alterForRoot(fpr, tpr):
     return fpr, tpr
 #enddef
 
-def getA_pi(fpr, tpr, prevalence, costs, prior):
+def getA_pi(fpr, tpr, prevalence, costs, BayesianPriorPoint):
     #from scipy.optimize import root as findRoot
     from scipy.optimize import brentq
 
@@ -195,7 +184,7 @@ def getA_pi(fpr, tpr, prevalence, costs, prior):
 
     approximate_y              = interp1d(fprForRoot, tprForRoot)  # x,y; to estimate y=f(x)
     approximate_x              = interp1d(tprForRoot, fprForRoot)  # y,x; to estimate x=f_inverse(y)
-    b_iso_line_y, b_iso_line_x = bayesian_iso_lines(prevalence, costs, prior)
+    b_iso_line_y, b_iso_line_x = bayesian_iso_lines(prevalence, costs, BayesianPriorPoint)
 
     def roc_over_bayesian_iso_line(x):
         # this function is NOT vectorized
@@ -224,7 +213,7 @@ def findRoot(roc_minus_b, approx, isVertical=True):
         type='vertical'
     else:
         type='horizontal'
-    print(f'\nSeeking {type} root on interval [0, 1] with range [{roc_minus_b(0):0.2f}, {roc_minus_b(1):0.2f}]')
+    # print(f'\n   Seeking {type} root on interval [0, 1] with range [{roc_minus_b(0):0.2f}, {roc_minus_b(1):0.2f}]')
     try:
         A_pi_val, r = brentq(lambda z: roc_minus_b(z), 0, 1, full_output=True, disp=False)
         rootFound = r.converged
@@ -239,29 +228,29 @@ def findRoot(roc_minus_b, approx, isVertical=True):
             A_pi_x = A_pi_val
             A_pi_y = float(approx(A_pi_x))
             rootVal = roc_minus_b(A_pi_x)
-            print(f'returning vertical root value {rootVal:0.2g} at ({A_pi_x:0.2f},{A_pi_y:0.2f})')
+            # print(f'   returning vertical root value {rootVal:0.2g} at ({A_pi_x:0.2f},{A_pi_y:0.2f})')
             return (A_pi_x, A_pi_y), rootVal
         else:
             A_pi_y = A_pi_val
             A_pi_x = float(approx(A_pi_y))
             rootVal = roc_minus_b(A_pi_y)
-            print(f'returning horizontal root value {rootVal:0.2g} at ({A_pi_x:0.2f},{A_pi_y:0.2f})')
+            # print(f'   returning horizontal root value {rootVal:0.2g} at ({A_pi_x:0.2f},{A_pi_y:0.2f})')
             return (A_pi_x, A_pi_y), rootVal
         # endif
     else:
-        print(f'returning no root value')
+        print(f'   returning no root value')
         return (None, None), None
     # endif
 # enddef
 
-def BayesianAUC(fpr, tpr, group, prevalence, costs, prior):
+def BayesianAUC(fpr, tpr, group, prevalence, costs, BayesianPriorPoint):
     # this function computes measures over the group/region specified in fpr and tpr
     # that is, the measures are group measures, unless the input fpr and tpr represent the whole
 
     approximate_y = interp1d(fpr, tpr)  # x,y; to estimate y=f(x)
     approximate_x = interp1d(tpr, fpr)  # y,x; to estimate x=f_inverse(y)
 
-    b_iso_line_y,  b_iso_line_x  = bayesian_iso_lines(prevalence, costs, prior)
+    b_iso_line_y,  b_iso_line_x  = bayesian_iso_lines(prevalence, costs, BayesianPriorPoint)
 
     def roc_over_dpos(x):
         # this function is NOT vectorized

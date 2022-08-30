@@ -16,6 +16,7 @@ from sklearn.tree               import DecisionTreeClassifier
 from sklearn.ensemble           import AdaBoostClassifier
 from sklearn.naive_bayes        import MultinomialNB
 from sklearn.svm                import LinearSVC
+from sklearn.svm                import SVC
 from sklearn.ensemble           import RandomForestClassifier
 from sklearn.ensemble           import GradientBoostingClassifier
 from sklearn.metrics            import confusion_matrix
@@ -168,10 +169,13 @@ def get_trainer(param, class_weight = None):
         elif param == 'cart_gini':
             trainer = DecisionTreeClassifier(random_state = 1, criterion = "gini", class_weight = class_weight)
         elif param == 'svm_linear':
-            trainer = LinearSVC()
-        elif param == 'ada_boost':
-            #Does not support class_weight
-            trainer = AdaBoostClassifier(random_state = 1)
+            trainer = LinearSVC(class_weight='balanced')
+        elif param == 'svm_rbf':
+            trainer = SVC(kernel='rbf', probability=True, class_weight='balanced')
+        elif param == 'ada_boost': #Does not support class_weight
+            #trainer = AdaBoostClassifier(random_state = 1)
+            trainer = AdaBoostClassifier(DecisionTreeClassifier(max_depth=1),
+                                         algorithm="SAMME", n_estimators=200, random_state=1)
         elif param == 'naive_bayes':
             #Does not support random_state or class_weight
             trainer = MultinomialNB()
